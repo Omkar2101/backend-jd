@@ -1,0 +1,38 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace backend_jd_api.Models
+{
+    public class UploadRequest
+    {
+        [Required]
+        public IFormFile File { get; set; } = null!;
+
+        [Required]
+        [EmailAddress]
+        public string UserEmail { get; set; } = string.Empty;
+    }
+
+    public class AnalyzeRequest
+    {
+        [Required]
+        [MinLength(50, ErrorMessage = "Job description must be at least 50 characters")]
+        public string Text { get; set; } = string.Empty;
+
+        public string? JobTitle { get; set; }
+        
+        [Required]
+        [EmailAddress]
+        public string UserEmail { get; set; } = string.Empty;
+    }
+
+    public class JobResponse
+    {
+        public string Id { get; set; } = string.Empty;
+        public string OriginalText { get; set; } = string.Empty;
+        public string ImprovedText { get; set; } = string.Empty;
+        public string UserEmail { get; set; } = string.Empty;  // Add this line
+        public AnalysisResult? Analysis { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string FileName { get; set; } = string.Empty;
+    }
+}

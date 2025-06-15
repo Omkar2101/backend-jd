@@ -1,0 +1,6 @@
+@backend_jd_api_HostAddress = http://localhost:5268
+
+GET {{backend_jd_api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
