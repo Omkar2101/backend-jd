@@ -1,0 +1,18 @@
+# Environment variables
+.env
+
+# .NET build output
+bin/
+obj/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+
+# Docker volumes
+mongodb_data/
+
+# IDE settings
+.vscode/
+.idea/

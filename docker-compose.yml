@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT}:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - Database__ConnectionString=${MONGO_CONNECTION_STRING}
+      - Database__DatabaseName=${MONGO_DATABASE_NAME}
+      - Database__CollectionName=${MONGO_COLLECTION_NAME}
+      - PythonApi__BaseUrl=${PYTHON_API_BASE_URL}
+      - PythonApi__TimeoutSeconds=${PYTHON_API_TIMEOUT}
+    depends_on:
+      - mongodb
+    networks:
+      - backend-network
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - backend-network
+
+networks:
+  backend-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

@@ -1,0 +1,22 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Development files
+**/.vs/
+**/.vscode/
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+
+# Git directory
+.git/
+.gitignore
+
+# Other files
+**/README.md
+**/LICENSE
+**/*.md
+Dockerfile*
+.dockerignore
