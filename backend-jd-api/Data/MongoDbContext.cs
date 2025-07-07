@@ -17,6 +17,7 @@ namespace backend_jd_api.Data
         }
 
         public IMongoCollection<JobDescription> Jobs => _jobs;
+        public IMongoDatabase Database => _database;
 
         // Simple CRUD operations
         public async Task<JobDescription> CreateJobAsync(JobDescription job)
@@ -50,6 +51,14 @@ namespace backend_jd_api.Data
         {
             var result = await _jobs.DeleteOneAsync(x => x.Id == id);
             return result.DeletedCount > 0;
+        }
+
+        public async Task<List<JobDescription>> GetJobsByUserEmailAsync(string email)
+        {
+            return await _jobs
+                .Find(x => x.UserEmail == email)
+                .SortByDescending(x => x.CreatedAt)
+                .ToListAsync();
         }
     }
 }
