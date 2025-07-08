@@ -11,6 +11,9 @@ namespace backend_jd_api.Services
         private readonly HttpClient _httpClient;
         private readonly ILogger<PythonService> _logger;
 
+        // Add this constructor for Moq
+        protected PythonService() { }
+
         public PythonService(HttpClient httpClient, AppSettings settings, ILogger<PythonService> logger)
         {
             _httpClient = httpClient;
@@ -20,7 +23,7 @@ namespace backend_jd_api.Services
             _httpClient.Timeout = TimeSpan.FromSeconds(settings.PythonApi.TimeoutSeconds);
         }
 
-        public async Task<AnalysisResult> AnalyzeTextAsync(string text)
+        public virtual async Task<AnalysisResult> AnalyzeTextAsync(string text)
         {
             try
             {
@@ -44,10 +47,18 @@ namespace backend_jd_api.Services
                 var responseJson = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation("Received response from Python API: {ResponseBody}", responseJson);
                 
-                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase,PropertyNameCaseInsensitive = true };
                 var result = JsonSerializer.Deserialize<AnalysisResult>(responseJson, options);
 
                 return result ?? new AnalysisResult();
+            }
+            catch (HttpRequestException ex)
+            {
+                throw; // preserves original type
+            }
+            catch (JsonException ex)
+            {
+                throw; // preserves original type
             }
             catch (Exception ex)
             {
@@ -81,7 +92,7 @@ namespace backend_jd_api.Services
         //         throw new Exception($"Failed to extract text from file {fileName}", ex);
         //     }
         // }
-        public async Task<string> ExtractTextFromFileAsync(byte[] fileContent, string fileName)
+        public virtual async Task<string> ExtractTextFromFileAsync(byte[] fileContent, string fileName)
         {
             try
             {

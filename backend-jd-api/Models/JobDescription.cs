@@ -48,9 +48,20 @@ namespace backend_jd_api.Models
 
     public class Suggestion
     {
-        public string Original { get; set; } = string.Empty;
-        public string Improved { get; set; } = string.Empty;
-        public string rationale { get; set; } = string.Empty;
-        public string Category { get; set; } = string.Empty; // Bias, Clarity, SEO
+        // public string Original { get; set; } = string.Empty;
+        // public string Improved { get; set; } = string.Empty;
+        // public string rationale { get; set; } = string.Empty;
+        // public string Category { get; set; } = string.Empty; // Bias, Clarity, SEO
+            [JsonPropertyName("original")]
+            public string Original { get; set; } = string.Empty;
+
+            [JsonPropertyName("improved")]
+            public string Improved { get; set; } = string.Empty;
+
+            [JsonPropertyName("rationale")]
+            public string rationale { get; set; } = string.Empty;
+
+            [JsonPropertyName("category")]
+            public string Category { get; set; } = string.Empty;
     }
 }

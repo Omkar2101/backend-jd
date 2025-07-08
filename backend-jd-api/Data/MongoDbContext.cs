@@ -9,6 +9,9 @@ namespace backend_jd_api.Data
         private readonly IMongoDatabase _database;
         private readonly IMongoCollection<JobDescription> _jobs;
 
+        // Add this constructor for Moq
+        protected MongoDbContext() { }
+
         public MongoDbContext(AppSettings settings)
         {
             var client = new MongoClient(settings.Database.ConnectionString);
@@ -20,18 +23,18 @@ namespace backend_jd_api.Data
         public IMongoDatabase Database => _database;
 
         // Simple CRUD operations
-        public async Task<JobDescription> CreateJobAsync(JobDescription job)
+        public virtual async Task<JobDescription> CreateJobAsync(JobDescription job)
         {
             await _jobs.InsertOneAsync(job);
             return job;
         }
 
-        public async Task<JobDescription?> GetJobAsync(string id)
+        public virtual async Task<JobDescription?> GetJobAsync(string id)
         {
             return await _jobs.Find(x => x.Id == id).FirstOrDefaultAsync();
         }
 
-        public async Task<List<JobDescription>> GetAllJobsAsync(int skip = 0, int limit = 20)
+        public virtual async Task<List<JobDescription>> GetAllJobsAsync(int skip = 0, int limit = 20)
         {
             return await _jobs
                 .Find(_ => true)
@@ -41,19 +44,19 @@ namespace backend_jd_api.Data
                 .ToListAsync();
         }
 
-        public async Task<JobDescription> UpdateJobAsync(JobDescription job)
+        public virtual async Task<JobDescription> UpdateJobAsync(JobDescription job)
         {
             await _jobs.ReplaceOneAsync(x => x.Id == job.Id, job);
             return job;
         }
 
-        public async Task<bool> DeleteJobAsync(string id)
+        public virtual async Task<bool> DeleteJobAsync(string id)
         {
             var result = await _jobs.DeleteOneAsync(x => x.Id == id);
             return result.DeletedCount > 0;
         }
 
-        public async Task<List<JobDescription>> GetJobsByUserEmailAsync(string email)
+        public virtual async Task<List<JobDescription>> GetJobsByUserEmailAsync(string email)
         {
             return await _jobs
                 .Find(x => x.UserEmail == email)

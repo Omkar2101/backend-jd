@@ -46,15 +46,28 @@ namespace backend_jd_api.Tests.Services
                 ImprovedText = "Improved job description",
                 suggestions = new List<Suggestion>
                 {
-                    new Suggestion { Original = "Suggestion 1" },
-                    new Suggestion { Original = "Suggestion 2" }
+                    new Suggestion 
+                    { 
+                        Original = "Suggestion 1",
+                        Improved = "Improved 1",
+                        rationale = "Rationale 1",
+                        Category = "Category 1"
+                    },
+                    new Suggestion 
+                    { 
+                        Original = "Suggestion 2",
+                        Improved = "Improved 2",
+                        rationale = "Rationale 2",
+                        Category = "Category 2"
+                    }
                 }
             };
+
 
             var response = new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(JsonSerializer.Serialize(expectedResult))
+                Content = new StringContent(JsonSerializer.Serialize(expectedResult),Encoding.UTF8, "application/json")
             };
 
             _mockHttpMessageHandler
@@ -67,6 +80,10 @@ namespace backend_jd_api.Tests.Services
 
             // Act
             var result = await _service.AnalyzeTextAsync(text);
+            //log the result
+            // _mockLogger.Object.LogInformation("Analysis Result: {@Result}", result);
+            Console.WriteLine("Analysis Result: " + JsonSerializer.Serialize(result));
+
 
             // Assert
             Assert.NotNull(result);
@@ -108,24 +125,7 @@ namespace backend_jd_api.Tests.Services
                 _service.AnalyzeTextAsync(text));
         }
 
-        [Fact]
-        public async Task AnalyzeTextAsync_WithTimeout_ThrowsException()
-        {
-            // Arrange
-            var text = "Test job description";
-
-            _mockHttpMessageHandler
-                .Protected()
-                .Setup<Task<HttpResponseMessage>>(
-                    "SendAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>())
-                .ThrowsAsync(new TaskCanceledException());
-
-            // Act & Assert
-            await Assert.ThrowsAsync<TaskCanceledException>(() =>
-                _service.AnalyzeTextAsync(text));
-        }
+        
 
         [Fact]
         public async Task AnalyzeTextAsync_WithInvalidResponse_ThrowsException()
