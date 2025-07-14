@@ -1,711 +1,3 @@
-// using Microsoft.AspNetCore.Http;
-// using Microsoft.AspNetCore.Mvc;
-// using Microsoft.AspNetCore.Mvc.Testing;
-// using Microsoft.Extensions.Logging;
-// using Microsoft.Extensions.DependencyInjection;
-// using Microsoft.AspNetCore.Hosting;
-// using Moq;
-// using System.Net;
-// using System.Text;
-// using Xunit;
-// using backend_jd_api.Controllers;
-// using backend_jd_api.Models;
-// using backend_jd_api.Services;
-// using backend_jd_api.Data;
-
-// namespace backend_jd_api.Tests.Controllers
-// {
-//     public class JobControllerTests
-//     {
-//         private readonly Mock<JobService> _mockJobService;
-//         private readonly Mock<ILogger<JobController>> _mockLogger;
-//         private readonly JobController _controller;
-
-//         public JobControllerTests()
-//         {
-//             _mockJobService = new Mock<JobService>();
-//             _mockLogger = new Mock<ILogger<JobController>>();
-//             _controller = new JobController(_mockJobService.Object, _mockLogger.Object);
-//         }
-
-//         private IFormFile CreateMockFormFile(string fileName, string content)
-//         {
-//             var bytes = Encoding.UTF8.GetBytes(content);
-//             var file = new Mock<IFormFile>();
-            
-//             file.Setup(f => f.FileName).Returns(fileName);
-//             file.Setup(f => f.Length).Returns(bytes.Length);
-//             file.Setup(f => f.ContentType).Returns("text/plain");
-//             file.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(bytes));
-//             file.Setup(f => f.ContentDisposition).Returns($"form-data; name=\"file\"; filename=\"{fileName}\"");
-            
-//             return file.Object;
-//         }
-
-
-
-//         [Fact]
-//         public async Task UploadFile_WithValidRequest_ReturnsOkResult()
-//         {
-//             // Arrange
-//             var mockFile = CreateMockFormFile("test.pdf", "Test job description content");
-//             var request = new UploadRequest
-//             {
-//                 File = mockFile,
-//                 UserEmail = "test@example.com"
-//             };
-
-//             var expectedResponse = new JobResponse
-//             {
-//                 Id = "507f1f77bcf86cd799439011",
-//                 OriginalText = "Test job description content",
-//                 FileName = "test.pdf",
-//                 CreatedAt = DateTime.UtcNow
-//             };
-
-//             _mockJobService
-//                 .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), It.IsAny<string>()))
-//                 .ReturnsAsync(expectedResponse);
-
-//             // Act
-//             var result = await _controller.UploadFile(request);
-
-//             // Assert
-//             var okResult = Assert.IsType<OkObjectResult>(result);
-//             var response = Assert.IsType<JobResponse>(okResult.Value);
-//             Assert.Equal(expectedResponse.Id, response.Id);
-//             Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
-//             Assert.Equal(expectedResponse.FileName, response.FileName);
-//         }
-
-//         // [Fact]
-//         // public async Task UploadFile_WithNullFile_ReturnsBadRequest()
-//         // {
-//         //     // Arrange
-//         //     var request = new UploadRequest
-//         //     {
-//         //         File = null,
-//         //         UserEmail = "test@example.com"
-//         //     };
-
-//         //     // Act
-//         //     var result = await _controller.UploadFile(request);
-
-//         //     // Assert
-//         //     var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//         //     Assert.Equal("No file uploaded", badRequestResult.Value);
-//         // }
-
-//         // [Fact]
-//         // public async Task UploadFile_WithEmptyFile_ReturnsBadRequest()
-//         // {
-//         //     // Arrange
-//         //     var mockFile = CreateMockFormFile("test.txt", "");
-//         //     var request = new UploadRequest
-//         //     {
-//         //         File = mockFile,
-//         //         UserEmail = "test@example.com"
-//         //     };
-
-//         //     // Act
-//         //     var result = await _controller.UploadFile(request);
-
-//         //     // Assert
-//         //     var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//         //     Assert.Equal("No file uploaded", badRequestResult.Value);
-//         // }
-
-//     //     [Fact]
-//     //     public async Task UploadFile_WithoutUserEmail_ReturnsBadRequest()
-//     //     {
-//     //         // Arrange
-//     //         var mockFile = CreateMockFormFile("test.txt", "Test content");
-//     //         var request = new UploadRequest
-//     //         {
-//     //             File = mockFile,
-//     //             UserEmail = null
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.UploadFile(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Equal("User email is required", badRequestResult.Value);
-//     //     }
-
-//     //     [Theory]
-//     //     [InlineData("test.exe")]
-//     //     [InlineData("test.bat")]
-//     //     [InlineData("test.zip")]
-//     //     [InlineData("test.html")]
-//     //     public async Task UploadFile_WithInvalidFileType_ReturnsBadRequest(string fileName)
-//     //     {
-//     //         // Arrange
-//     //         var mockFile = CreateMockFormFile(fileName, "Test content");
-//     //         var request = new UploadRequest
-//     //         {
-//     //             File = mockFile,
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.UploadFile(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Contains("Invalid file type", badRequestResult.Value?.ToString());
-//     //     }
-
-//     //     [Theory]
-//     //     [InlineData("test.txt")]
-//     //     [InlineData("test.doc")]
-//     //     [InlineData("test.docx")]
-//     //     [InlineData("test.pdf")]
-//     //     [InlineData("test.jpg")]
-//     //     [InlineData("test.jpeg")]
-//     //     [InlineData("test.png")]
-//     //     public async Task UploadFile_WithValidFileTypes_CallsJobService(string fileName)
-//     //     {
-//     //         // Arrange
-//     //         var mockFile = CreateMockFormFile(fileName, "Test job description content");
-//     //         var request = new UploadRequest
-//     //         {
-//     //             File = mockFile,
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         var expectedResponse = new JobResponse
-//     //         {
-//     //             Id = "507f1f77bcf86cd799439011",
-//     //             FileName = fileName
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), It.IsAny<string>()))
-//     //             .ReturnsAsync(expectedResponse);
-
-//     //         // Act
-//     //         var result = await _controller.UploadFile(request);
-
-//     //         // Assert
-//     //         Assert.IsType<OkObjectResult>(result);
-//     //         _mockJobService.Verify(s => s.AnalyzeFromFileAsync(mockFile, "test@example.com"), Times.Once);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task UploadFile_WhenServiceThrowsException_ReturnsInternalServerError()
-//     //     {
-//     //         // Arrange
-//     //         var mockFile = CreateMockFormFile("test.txt", "Test content");
-//     //         var request = new UploadRequest
-//     //         {
-//     //             File = mockFile,
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), It.IsAny<string>()))
-//     //             .ThrowsAsync(new Exception("Service error"));
-
-//     //         // Act
-//     //         var result = await _controller.UploadFile(request);
-
-//     //         // Assert
-//     //         var statusCodeResult = Assert.IsType<ObjectResult>(result);
-//     //         Assert.Equal(500, statusCodeResult.StatusCode);
-//     //         Assert.Equal("An error occurred while processing your file. Please try again.", statusCodeResult.Value);
-//     //     }
-
-//     //     #endregion
-
-//     //     #region AnalyzeText Tests
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithValidRequest_ReturnsOkResult()
-//     //     {
-//     //         // Arrange
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = "This is a valid job description with more than fifty characters for testing purposes.",
-//     //             UserEmail = "test@example.com",
-//     //             JobTitle = "Software Developer"
-//     //         };
-
-//     //         var expectedResponse = new JobResponse
-//     //         {
-//     //             Id = "507f1f77bcf86cd799439011",
-//     //             OriginalText = request.Text,
-//     //             CreatedAt = DateTime.UtcNow
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-//     //             .ReturnsAsync(expectedResponse);
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var okResult = Assert.IsType<OkObjectResult>(result);
-//     //         var response = Assert.IsType<JobResponse>(okResult.Value);
-//     //         Assert.Equal(expectedResponse.Id, response.Id);
-//     //         Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithEmptyText_ReturnsBadRequest()
-//     //     {
-//     //         // Arrange
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = "",
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Equal("Text is required", badRequestResult.Value);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithNullText_ReturnsBadRequest()
-//     //     {
-//     //         // Arrange
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = null,
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Equal("Text is required", badRequestResult.Value);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithShortText_ReturnsBadRequest()
-//     //     {
-//     //         // Arrange
-//     //         var shortText = "Short text"; // Less than 50 characters
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = shortText,
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Contains("Job description text must be at least 50 characters", badRequestResult.Value?.ToString());
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithoutUserEmail_ReturnsBadRequest()
-//     //     {
-//     //         // Arrange
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = "This is a valid job description with more than fifty characters for testing purposes.",
-//     //             UserEmail = null
-//     //         };
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-//     //         Assert.Equal("User email is required", badRequestResult.Value);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WithExactly50Characters_CallsJobService()
-//     //     {
-//     //         // Arrange
-//     //         var text = "This text has exactly fifty characters in total!"; // Exactly 50 characters
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = text,
-//     //             UserEmail = "test@example.com",
-//     //             JobTitle = "Developer"
-//     //         };
-
-//     //         var expectedResponse = new JobResponse { Id = "507f1f77bcf86cd799439011" };
-//     //         _mockJobService
-//     //             .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-//     //             .ReturnsAsync(expectedResponse);
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         Assert.IsType<OkObjectResult>(result);
-//     //         _mockJobService.Verify(s => s.AnalyzeTextAsync(text, "test@example.com", "Developer"), Times.Once);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task AnalyzeText_WhenServiceThrowsException_ReturnsInternalServerError()
-//     //     {
-//     //         // Arrange
-//     //         var request = new AnalyzeRequest
-//     //         {
-//     //             Text = "This is a valid job description with more than fifty characters for testing purposes.",
-//     //             UserEmail = "test@example.com"
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-//     //             .ThrowsAsync(new Exception("Service error"));
-
-//     //         // Act
-//     //         var result = await _controller.AnalyzeText(request);
-
-//     //         // Assert
-//     //         var statusCodeResult = Assert.IsType<ObjectResult>(result);
-//     //         Assert.Equal(500, statusCodeResult.StatusCode);
-//     //         Assert.Equal("An error occurred while analyzing the text. Please try again.", statusCodeResult.Value);
-//     //     }
-
-//     //     #endregion
-
-//     //     #region GetJob Tests
-
-//     //     [Fact]
-//     //     public async Task GetJob_WithValidId_ReturnsOkResult()
-//     //     {
-//     //         // Arrange
-//     //         var jobId = "507f1f77bcf86cd799439011";
-//     //         var expectedJob = new JobResponse
-//     //         {
-//     //             Id = jobId,
-//     //             OriginalText = "Test job description",
-//     //             CreatedAt = DateTime.UtcNow
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.GetJobAsync(jobId))
-//     //             .ReturnsAsync(expectedJob);
-
-//     //         // Act
-//     //         var result = await _controller.GetJob(jobId);
-
-//     //         // Assert
-//     //         var okResult = Assert.IsType<OkObjectResult>(result);
-//     //         var job = Assert.IsType<JobResponse>(okResult.Value);
-//     //         Assert.Equal(expectedJob.Id, job.Id);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetJob_WithNonExistentId_ReturnsNotFound()
-//     //     {
-//     //         // Arrange
-//     //         var jobId = "507f1f77bcf86cd799439011";
-//     //         _mockJobService
-//     //             .Setup(s => s.GetJobAsync(jobId))
-//     //             .ReturnsAsync((JobResponse?)null);
-
-//     //         // Act
-//     //         var result = await _controller.GetJob(jobId);
-
-//     //         // Assert
-//     //         Assert.IsType<NotFoundResult>(result);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetJob_WhenServiceThrowsException_ReturnsInternalServerError()
-//     //     {
-//     //         // Arrange
-//     //         var jobId = "507f1f77bcf86cd799439011";
-//     //         _mockJobService
-//     //             .Setup(s => s.GetJobAsync(jobId))
-//     //             .ThrowsAsync(new Exception("Database error"));
-
-//     //         // Act
-//     //         var result = await _controller.GetJob(jobId);
-
-//     //         // Assert
-//     //         var statusCodeResult = Assert.IsType<ObjectResult>(result);
-//     //         Assert.Equal(500, statusCodeResult.StatusCode);
-//     //         Assert.Equal("Error retrieving job", statusCodeResult.Value);
-//     //     }
-
-//     //     #endregion
-
-//     //     #region GetAllJobs Tests
-
-//     //     [Fact]
-//     //     public async Task GetAllJobs_WithDefaultParameters_ReturnsOkResult()
-//     //     {
-//     //         // Arrange
-//     //         var expectedJobs = new List<JobResponse>
-//     //         {
-//     //             new() { Id = "1", OriginalText = "Job 1" },
-//     //             new() { Id = "2", OriginalText = "Job 2" }
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.GetAllJobsAsync(0, 20))
-//     //             .ReturnsAsync(expectedJobs);
-
-//     //         // Act
-//     //         var result = await _controller.GetAllJobs();
-
-//     //         // Assert
-//     //         var okResult = Assert.IsType<OkObjectResult>(result);
-//     //         var jobs = Assert.IsType<List<JobResponse>>(okResult.Value);
-//     //         Assert.Equal(2, jobs.Count);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetAllJobs_WithCustomParameters_CallsServiceWithCorrectParameters()
-//     //     {
-//     //         // Arrange
-//     //         var skip = 10;
-//     //         var limit = 5;
-//     //         var expectedJobs = new List<JobResponse>();
-
-//     //         _mockJobService
-//     //             .Setup(s => s.GetAllJobsAsync(skip, limit))
-//     //             .ReturnsAsync(expectedJobs);
-
-//     //         // Act
-//     //         var result = await _controller.GetAllJobs(skip, limit);
-
-//     //         // Assert
-//     //         Assert.IsType<OkObjectResult>(result);
-//     //         _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetAllJobs_WhenServiceThrowsException_ReturnsInternalServerError()
-//     //     {
-//     //         // Arrange
-//     //         _mockJobService
-//     //             .Setup(s => s.GetAllJobsAsync(It.IsAny<int>(), It.IsAny<int>()))
-//     //             .ThrowsAsync(new Exception("Database error"));
-
-//     //         // Act
-//     //         var result = await _controller.GetAllJobs();
-
-//     //         // Assert
-//     //         var statusCodeResult = Assert.IsType<ObjectResult>(result);
-//     //         Assert.Equal(500, statusCodeResult.StatusCode);
-//     //         Assert.Equal("Error retrieving jobs", statusCodeResult.Value);
-//     //     }
-
-//     //     #endregion
-
-//     //     #region GetUserJobs Tests
-
-//     //     [Fact]
-//     //     public async Task GetUserJobs_WithValidEmail_ReturnsOkResult()
-//     //     {
-//     //         // Arrange
-//     //         var email = "test@example.com";
-//     //         var expectedJobs = new List<JobDescription>
-//     //         {
-//     //             new() { Id = "1", OriginalText = "Job 1", UserEmail = email },
-//     //             new() { Id = "2", OriginalText = "Job 2", UserEmail = email }
-//     //         };
-
-//     //         _mockJobService
-//     //             .Setup(s => s.GetByUserEmailAsync(email))
-//     //             .ReturnsAsync(expectedJobs);
-
-//     //         // Act
-//     //         var result = await _controller.GetUserJobs(email);
-
-//     //         // Assert
-//     //         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-//     //         var jobs = Assert.IsType<List<JobDescription>>(okResult.Value);
-//     //         Assert.Equal(2, jobs.Count);
-//     //         Assert.All(jobs, job => Assert.Equal(email, job.UserEmail));
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetUserJobs_WithNonExistentEmail_ReturnsEmptyList()
-//     //     {
-//     //         // Arrange
-//     //         var email = "nonexistent@example.com";
-//     //         var expectedJobs = new List<JobDescription>();
-
-//     //         _mockJobService
-//     //             .Setup(s => s.GetByUserEmailAsync(email))
-//     //             .ReturnsAsync(expectedJobs);
-
-//     //         // Act
-//     //         var result = await _controller.GetUserJobs(email);
-
-//     //         // Assert
-//     //         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-//     //         var jobs = Assert.IsType<List<JobDescription>>(okResult.Value);
-//     //         Assert.Empty(jobs);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetUserJobs_WhenServiceThrowsException_ReturnsInternalServerError()
-//     //     {
-//     //         // Arrange
-//     //         var email = "test@example.com";
-//     //         _mockJobService
-//     //             .Setup(s => s.GetByUserEmailAsync(email))
-//     //             .ThrowsAsync(new Exception("Database error"));
-
-//     //         // Act
-//     //         var result = await _controller.GetUserJobs(email);
-
-//     //         // Assert
-//     //         var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
-//     //         Assert.Equal(500, statusCodeResult.StatusCode);
-//     //         Assert.Equal("Internal server error", statusCodeResult.Value);
-//     //     }
-
-//     //     #endregion
-
-//     //     #region Helper Methods
-
-//     //     private static IFormFile CreateMockFormFile(string fileName, string content)
-//     //     {
-//     //         var mockFile = new Mock<IFormFile>();
-//     //         var contentBytes = Encoding.UTF8.GetBytes(content);
-//     //         var stream = new MemoryStream(contentBytes);
-
-//     //         mockFile.Setup(f => f.FileName).Returns(fileName);
-//     //         mockFile.Setup(f => f.Length).Returns(contentBytes.Length);
-//     //         mockFile.Setup(f => f.OpenReadStream()).Returns(stream);
-//     //         mockFile.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-//     //                .Returns((Stream target, CancellationToken token) =>
-//     //                {
-//     //                    stream.Position = 0;
-//     //                    return stream.CopyToAsync(target, token);
-//     //                });
-
-//     //         return mockFile.Object;
-//     //     }
-
-//     //     #endregion
-//     // }
-
-//     // #region Integration Tests
-
-//     // /// <summary>
-//     // /// Integration tests using TestServer for end-to-end testing
-//     // /// </summary>
-//     // public class JobControllerIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
-//     // {
-//     //     private readonly WebApplicationFactory<Program> _factory;
-//     //     private readonly HttpClient _client;
-
-//     //     // public JobControllerIntegrationTests(WebApplicationFactory<Program> factory)
-//     //     // {
-//     //     //     _factory = factory;
-//     //     //     _client = _factory.CreateClient();
-//     //     // }
-//     //     public JobControllerIntegrationTests(WebApplicationFactory<Program> factory)
-//     //         {
-//     //             _factory = factory.WithWebHostBuilder(builder =>
-//     //             {
-//     //                 builder.ConfigureServices(services =>
-//     //                 {
-//     //                     // Remove the real MongoDB connection
-//     //                     var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(MongoDbContext));
-//     //                     if (descriptor != null)
-//     //                     {
-//     //                         services.Remove(descriptor);
-//     //                     }
-                        
-//     //                     // Add a mock MongoDB context
-//     //                     var mockDb = new Mock<MongoDbContext>();
-//     //                     mockDb.Setup(x => x.GetJobAsync("invalid-id")).ReturnsAsync((JobDescription)null);
-//     //                     mockDb.Setup(x => x.GetJobAsync(It.IsAny<string>())).ReturnsAsync((JobDescription)null);
-                        
-//     //                     services.AddSingleton(mockDb.Object);
-//     //                 });
-                    
-//     //                 builder.UseEnvironment("Testing");
-//     //             });
-                
-//     //             _client = _factory.CreateClient();
-//     //         }
-
-//     //     [Fact]
-//     //     public async Task GetAllJobs_ReturnsSuccessStatusCode()
-//     //     {
-//     //         // Act
-//     //         var response = await _client.GetAsync("/api/jobs");
-
-//     //         // Assert
-//     //         response.EnsureSuccessStatusCode();
-//     //         Assert.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetJob_WithInvalidId_ReturnsNotFound()
-//     //     {
-//     //         // Act
-//     //         var response = await _client.GetAsync("/api/jobs/invalid-id");
-
-//     //         // Assert
-//     //         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task GetUserJobs_WithValidEmail_ReturnsSuccessStatusCode()
-//     //     {
-//     //         // Arrange
-//     //         var email = "test@example.com";
-
-//     //         // Act
-//     //         var response = await _client.GetAsync($"/api/jobs/user/{email}");
-
-//     //         // Assert
-//     //         response.EnsureSuccessStatusCode();
-//     //         Assert.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
-//     //     }
-
-//     //     [Fact]
-//     //     public async Task HealthCheck_ReturnsSuccessStatusCode()
-//     //     {
-//     //         // Act
-//     //         var response = await _client.GetAsync("/health");
-
-//     //         // Assert
-//     //         if (response.StatusCode == HttpStatusCode.NotFound)
-//     //         {
-//     //             // If health endpoint doesn't exist, that's fine for this test
-//     //             Assert.True(true);
-//     //         }
-//     //         else
-//     //         {
-//     //             response.EnsureSuccessStatusCode();
-//     //         }
-//     //     }
-
-//         // protected virtual void Dispose(bool disposing)
-//         // {
-//         //     if (disposing)
-//         //     {
-//         //         _client?.Dispose();
-//         //     }
-//         // }
-
-//         // public void Dispose()
-//         // {
-//         //     Dispose(true);
-//         //     GC.SuppressFinalize(this);
-//         // }
-//     }
-
-    
-// }
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -722,45 +14,34 @@ namespace backend_jd_api.Tests.Controllers
 {
     public class JobControllerTests
     {
-        private readonly Mock<MongoDbContext> _mockDbContext;
-        private readonly Mock<PythonService> _mockPythonService;
-        private readonly Mock<ILogger<JobService>> _mockJobServiceLogger;
+        private readonly Mock<IJobService> _mockJobService;
         private readonly Mock<ILogger<JobController>> _mockControllerLogger;
-        private readonly JobService _jobService;
         private readonly JobController _controller;
 
         public JobControllerTests()
         {
-            // Mock all JobService dependencies
-            _mockDbContext = new Mock<MongoDbContext>();
-            _mockPythonService = new Mock<PythonService>();
-            _mockJobServiceLogger = new Mock<ILogger<JobService>>();
+            _mockJobService = new Mock<IJobService>();
             _mockControllerLogger = new Mock<ILogger<JobController>>();
-
-            // Create actual JobService with mocked dependencies
-            _jobService = new JobService(_mockDbContext.Object, _mockPythonService.Object, _mockJobServiceLogger.Object);
-            
-            // Create controller with the JobService
-            _controller = new JobController(_jobService, _mockControllerLogger.Object);
+            _controller = new JobController(_mockJobService.Object, _mockControllerLogger.Object);
         }
 
         private IFormFile CreateMockFormFile(string fileName, string content)
         {
             var bytes = Encoding.UTF8.GetBytes(content);
             var file = new Mock<IFormFile>();
-            
+
             file.Setup(f => f.FileName).Returns(fileName);
             file.Setup(f => f.Length).Returns(bytes.Length);
             file.Setup(f => f.ContentType).Returns("text/plain");
             file.Setup(f => f.OpenReadStream()).Returns(new MemoryStream(bytes));
             file.Setup(f => f.ContentDisposition).Returns($"form-data; name=\"file\"; filename=\"{fileName}\"");
             file.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-                .Returns((Stream stream, CancellationToken token) => 
+                .Returns((Stream stream, CancellationToken token) =>
                 {
                     var sourceStream = new MemoryStream(bytes);
                     return sourceStream.CopyToAsync(stream, token);
                 });
-            
+
             return file.Object;
         }
 
@@ -776,36 +57,24 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            // Mock PythonService.ExtractTextFromFileAsync
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ReturnsAsync(fileContent);
-
-            // Mock PythonService.AnalyzeTextAsync
-            var mockAnalysis = new AnalysisResult
-            {
-                ImprovedText = "Improved job description content",
-                suggestions = new List<Suggestion>()
-            };
-            _mockPythonService
-                .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>()))
-                .ReturnsAsync(mockAnalysis);
-
-            // Mock database save
-            var savedJob = new JobDescription
+            var expectedResponse = new JobResponse
             {
                 Id = "507f1f77bcf86cd799439011",
                 OriginalText = fileContent,
-                ImprovedText = mockAnalysis.ImprovedText,
+                ImprovedText = "Improved job description content",
                 FileName = "test.txt",
                 UserEmail = "test@example.com",
                 CreatedAt = DateTime.UtcNow,
-                Analysis = mockAnalysis
+                Analysis = new AnalysisResult
+                {
+                    ImprovedText = "Improved job description content",
+                    suggestions = new List<Suggestion>()
+                }
             };
 
-            _mockDbContext
-                .Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>()))
-                .ReturnsAsync(savedJob);
+            _mockJobService
+                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
+                .ReturnsAsync(expectedResponse);
 
             // Act
             var result = await _controller.UploadFile(request);
@@ -813,16 +82,14 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
             var response = Assert.IsType<JobResponse>(okResult.Value);
-            Assert.Equal(savedJob.Id, response.Id);
-            Assert.Equal(savedJob.OriginalText, response.OriginalText);
-            Assert.Equal(savedJob.ImprovedText, response.ImprovedText);
-            Assert.Equal(savedJob.FileName, response.FileName);
-            Assert.Equal(savedJob.UserEmail, response.UserEmail);
+            Assert.Equal(expectedResponse.Id, response.Id);
+            Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
+            Assert.Equal(expectedResponse.ImprovedText, response.ImprovedText);
+            Assert.Equal(expectedResponse.FileName, response.FileName);
+            Assert.Equal(expectedResponse.UserEmail, response.UserEmail);
 
             // Verify service calls
-            _mockPythonService.Verify(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt"), Times.Once);
-            _mockPythonService.Verify(s => s.AnalyzeTextAsync(fileContent), Times.Once);
-            _mockDbContext.Verify(db => db.CreateJobAsync(It.IsAny<JobDescription>()), Times.Once);
+            _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
 
         [Fact]
@@ -945,45 +212,35 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            // Setup mocks
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ReturnsAsync(fileContent);
-
-            var mockAnalysis = new AnalysisResult
-            {
-                ImprovedText = "Improved content",
-                suggestions = new List<Suggestion>()
-            };
-            _mockPythonService
-                .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>()))
-                .ReturnsAsync(mockAnalysis);
-
-            var savedJob = new JobDescription
+            var expectedResponse = new JobResponse
             {
                 Id = "507f1f77bcf86cd799439011",
                 OriginalText = fileContent,
-                ImprovedText = mockAnalysis.ImprovedText,
+                ImprovedText = "Improved content",
                 FileName = fileName,
                 UserEmail = "test@example.com",
                 CreatedAt = DateTime.UtcNow,
-                Analysis = mockAnalysis
+                Analysis = new AnalysisResult
+                {
+                    ImprovedText = "Improved content",
+                    suggestions = new List<Suggestion>()
+                }
             };
 
-            _mockDbContext
-                .Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>()))
-                .ReturnsAsync(savedJob);
+            _mockJobService
+                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
+                .ReturnsAsync(expectedResponse);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            _mockPythonService.Verify(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), fileName), Times.Once);
+            _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
 
         [Fact]
-        public async Task UploadFile_PythonServiceThrowsException_ReturnsInternalServerError()
+        public async Task UploadFile_JobServiceThrowsException_ReturnsInternalServerError()
         {
             // Arrange
             var fileContent = "This is a test job description content that is longer than 50 characters.";
@@ -994,58 +251,9 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ThrowsAsync(new Exception("Python service error"));
-
-            // Act
-            var result = await _controller.UploadFile(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-            Assert.Equal("An error occurred while processing your file. Please try again.", statusCodeResult.Value);
-        }
-
-        [Fact]
-        public async Task UploadFile_ExtractedTextTooShort_ReturnsInternalServerError()
-        {
-            // Arrange
-            var shortContent = "Short"; // Less than 50 characters
-            var mockFile = CreateMockFormFile("test.txt", "Some file content");
-            var request = new UploadRequest
-            {
-                File = mockFile,
-                UserEmail = "test@example.com"
-            };
-
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ReturnsAsync(shortContent);
-
-            // Act
-            var result = await _controller.UploadFile(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-            Assert.Equal("An error occurred while processing your file. Please try again.", statusCodeResult.Value);
-        }
-
-        [Fact]
-        public async Task UploadFile_NoTextExtracted_ReturnsInternalServerError()
-        {
-            // Arrange
-            var mockFile = CreateMockFormFile("test.txt", "Some file content");
-            var request = new UploadRequest
-            {
-                File = mockFile,
-                UserEmail = "test@example.com"
-            };
-
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ReturnsAsync(string.Empty);
+            _mockJobService
+                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
+                .ThrowsAsync(new Exception("Service error"));
 
             // Act
             var result = await _controller.UploadFile(request);
@@ -1068,41 +276,645 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            // Setup mocks
-            _mockPythonService
-                .Setup(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), It.IsAny<string>()))
-                .ReturnsAsync(fileContent);
-
-            var mockAnalysis = new AnalysisResult
-            {
-                ImprovedText = "Improved content",
-                suggestions = new List<Suggestion>()
-            };
-            _mockPythonService
-                .Setup(s => s.AnalyzeTextAsync(It.IsAny<string>()))
-                .ReturnsAsync(mockAnalysis);
-
-            var savedJob = new JobDescription
+            var expectedResponse = new JobResponse
             {
                 Id = "507f1f77bcf86cd799439011",
                 OriginalText = fileContent,
-                ImprovedText = mockAnalysis.ImprovedText,
+                ImprovedText = "Improved content",
                 FileName = "test.TXT",
                 UserEmail = "test@example.com",
                 CreatedAt = DateTime.UtcNow,
-                Analysis = mockAnalysis
+                Analysis = new AnalysisResult
+                {
+                    ImprovedText = "Improved content",
+                    suggestions = new List<Suggestion>()
+                }
             };
 
-            _mockDbContext
-                .Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>()))
-                .ReturnsAsync(savedJob);
+            _mockJobService
+                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
+                .ReturnsAsync(expectedResponse);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            _mockPythonService.Verify(s => s.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.TXT"), Times.Once);
+            _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
+
+        [Fact]
+        public async Task AnalyzeText_WithValidRequest_ReturnsOkResult()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                JobTitle = "Software Developer",
+                UserEmail = "test@example.com"
+            };
+
+            var expectedResponse = new JobResponse
+            {
+                Id = "507f1f77bcf86cd799439011",
+                OriginalText = request.Text,
+                ImprovedText = "Improved job description content",
+                UserEmail = request.UserEmail,
+                CreatedAt = DateTime.UtcNow,
+                Analysis = new AnalysisResult
+                {
+                    ImprovedText = "Improved job description content",
+                    bias_score = 0.2,
+                    inclusivity_score = 0.8,
+                    clarity_score = 0.9,
+                    suggestions = new List<Suggestion>
+                    {
+                        new Suggestion
+                        {
+                            Original = "guys",
+                            Improved = "team members",
+                            rationale = "More inclusive language",
+                            Category = "Bias"
+                        }
+                    },
+                    seo_keywords = new List<string> { "software", "developer", "programming" }
+                }
+            };
+
+            _mockJobService
+                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
+                .ReturnsAsync(expectedResponse);
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var response = Assert.IsType<JobResponse>(okResult.Value);
+            Assert.Equal(expectedResponse.Id, response.Id);
+            Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
+            Assert.Equal(expectedResponse.ImprovedText, response.ImprovedText);
+            Assert.Equal(expectedResponse.UserEmail, response.UserEmail);
+            Assert.NotNull(response.Analysis);
+            Assert.Equal(expectedResponse.Analysis.bias_score, response.Analysis.bias_score);
+            Assert.Equal(expectedResponse.Analysis.inclusivity_score, response.Analysis.inclusivity_score);
+            Assert.Equal(expectedResponse.Analysis.clarity_score, response.Analysis.clarity_score);
+
+            // Verify service calls
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithNullText_ReturnsBadRequest()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = null,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text is required", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithEmptyText_ReturnsBadRequest()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "",
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text is required", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithWhitespaceOnlyText_ReturnsBadRequest()
+        {
+            // Arrange
+            var whitespaceText = "   "; // 3 spaces
+            var request = new AnalyzeRequest
+            {
+                Text = whitespaceText,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Contains($"Job description text must be at least 50 characters long. Current length: {whitespaceText.Trim().Length} characters", badRequestResult.Value.ToString());
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithShortText_ReturnsBadRequest()
+        {
+            // Arrange
+            var shortText = "Short text"; // Less than 50 characters
+            var request = new AnalyzeRequest
+            {
+                Text = shortText,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Contains($"Job description text must be at least 50 characters long. Current length: {shortText.Length} characters", badRequestResult.Value.ToString());
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithShortTextAfterTrim_ReturnsBadRequest()
+        {
+            // Arrange
+            var shortText = "   Short text   "; // Less than 50 characters after trim
+            var request = new AnalyzeRequest
+            {
+                Text = shortText,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Contains($"Job description text must be at least 50 characters long. Current length: {shortText.Trim().Length} characters", badRequestResult.Value.ToString());
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithNullUserEmail_ReturnsBadRequest()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                UserEmail = null
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("User email is required", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithEmptyUserEmail_ReturnsBadRequest()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                UserEmail = ""
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("User email is required", badRequestResult.Value);
+        }
+
+        
+
+        [Fact]
+        public async Task AnalyzeText_WithoutJobTitle_ProcessesSuccessfully()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                JobTitle = null, // No job title provided
+                UserEmail = "test@example.com"
+            };
+
+            var expectedResponse = new JobResponse
+            {
+                Id = "507f1f77bcf86cd799439011",
+                OriginalText = request.Text,
+                ImprovedText = "Improved content",
+                UserEmail = request.UserEmail,
+                CreatedAt = DateTime.UtcNow,
+                Analysis = new AnalysisResult
+                {
+                    ImprovedText = "Improved content",
+                    suggestions = new List<Suggestion>()
+                }
+            };
+
+            _mockJobService
+                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
+                .ReturnsAsync(expectedResponse);
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var response = Assert.IsType<JobResponse>(okResult.Value);
+            Assert.Equal(expectedResponse.Id, response.Id);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_JobServiceThrowsException_ReturnsInternalServerError()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                UserEmail = "test@example.com"
+            };
+
+            _mockJobService
+                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
+                .ThrowsAsync(new Exception("Service error"));
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var statusCodeResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, statusCodeResult.StatusCode);
+            Assert.Equal("An error occurred while analyzing the text. Please try again.", statusCodeResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithRepetitiveCharacters_ReturnsBadRequest()
+        {
+            // Arrange
+            var repetitiveText = "This is a job description with aaaaaaaaa repetitive characters that should be rejected because it contains too many consecutive same characters.";
+            var request = new AnalyzeRequest
+            {
+                Text = repetitiveText,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text contains too many repetitive characters. Please provide a proper job description.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithExcessiveSpecialCharacters_ReturnsBadRequest()
+        {
+            // Arrange
+            var textWithSpecialChars = "This job description has way too many special characters!@#$%^&*()_+{}|:<>?[]\\;',./~`±§¡™£¢∞§¶•ªº–≠";
+            var request = new AnalyzeRequest
+            {
+                Text = textWithSpecialChars,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text contains too many special characters. Please provide a valid job description.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithTooFewMeaningfulWords_ReturnsBadRequest()
+        {
+            // Arrange
+            var textWithFewWords = "Job a b c d e f g h i developer position available now.";
+            var request = new AnalyzeRequest
+            {
+                Text = textWithFewWords,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Please provide a more detailed job description with proper words.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithoutJobKeywords_ReturnsBadRequest()
+        {
+            // Arrange
+            var textWithoutJobKeywords = "This is a text about mountain hiking, art exhibitions, and baking cakes. It contains no information related to cooking";
+            var request = new AnalyzeRequest
+            {
+                Text = textWithoutJobKeywords,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text doesn't appear to be a job description. Please provide a valid job posting.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_WithGibberishText_ReturnsBadRequest()
+        {
+            // Arrange
+            var gibberishText = "Xbdfghjklmnpqrstvwxyz bcdfghjklmnpqrstvwxyz cdfghjklmnpqrstvwxyz dfghjklmnpqrstvwxyz fghjklmnpqrstvwxyz ghjklmnpqrstvwxyz hjklmnpqrstvwxyz jklmnpqrstvwxyz job position requirements";
+            var request = new AnalyzeRequest
+            {
+                Text = gibberishText,
+                UserEmail = "test@example.com"
+            };
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Text appears to be invalid. Please provide a proper job description.", badRequestResult.Value);
+        }
+       
+
+
+        #region GetJob Tests
+
+        [Fact]
+        public async Task GetJob_WithValidId_ReturnsOkResult()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+            var expectedResponse = new JobResponse
+            {
+                Id = jobId,
+                OriginalText = "Test job description",
+                ImprovedText = "Improved job description",
+                UserEmail = "test@example.com",
+                FileName = "test.txt",
+                CreatedAt = DateTime.UtcNow,
+                Analysis = new AnalysisResult
+                {
+                    bias_score = 0.3,
+                    inclusivity_score = 0.7,
+                    clarity_score = 0.8,
+                    suggestions = new List<Suggestion>()
+                }
+            };
+
+            _mockJobService
+                .Setup(s => s.GetJobAsync(jobId))
+                .ReturnsAsync(expectedResponse);
+
+            // Act
+            var result = await _controller.GetJob(jobId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var returnedJob = Assert.IsType<JobResponse>(okResult.Value);
+            Assert.Equal(expectedResponse.Id, returnedJob.Id);
+            Assert.Equal(expectedResponse.OriginalText, returnedJob.OriginalText);
+            Assert.Equal(expectedResponse.ImprovedText, returnedJob.ImprovedText);
+            Assert.Equal(expectedResponse.UserEmail, returnedJob.UserEmail);
+
+            _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetJob_WithInvalidId_ReturnsNotFound()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+
+            _mockJobService
+                .Setup(s => s.GetJobAsync(jobId))
+                .ReturnsAsync((JobResponse)null);
+
+            // Act
+            var result = await _controller.GetJob(jobId);
+
+            // Assert
+            var notFoundResult = Assert.IsType<NotFoundResult>(result);
+            _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetJob_JobServiceThrowsException_ReturnsInternalServerError()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+
+            _mockJobService
+                .Setup(s => s.GetJobAsync(jobId))
+                .ThrowsAsync(new Exception("Service error"));
+
+            // Act
+            var result = await _controller.GetJob(jobId);
+
+            // Assert
+            var statusCodeResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, statusCodeResult.StatusCode);
+            Assert.Equal("Error retrieving job", statusCodeResult.Value);
+        }
+
+        #endregion
+
+        #region GetAllJobs Tests
+
+        [Fact]
+        public async Task GetAllJobs_WithDefaultParameters_ReturnsOkResult()
+        {
+            // Arrange
+            var expectedJobs = new List<JobResponse>
+            {
+                new JobResponse
+                {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = "Job 1",
+                    ImprovedText = "Improved Job 1",
+                    UserEmail = "user1@example.com",
+                    CreatedAt = DateTime.UtcNow
+                },
+                new JobResponse
+                {
+                    Id = "507f1f77bcf86cd799439012",
+                    OriginalText = "Job 2",
+                    ImprovedText = "Improved Job 2",
+                    UserEmail = "user2@example.com",
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(0, 20))
+                .ReturnsAsync(expectedJobs);
+
+            // Act
+            var result = await _controller.GetAllJobs();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var returnedJobs = Assert.IsType<List<JobResponse>>(okResult.Value);
+            Assert.Equal(2, returnedJobs.Count);
+            Assert.Equal(expectedJobs[0].Id, returnedJobs[0].Id);
+            Assert.Equal(expectedJobs[1].Id, returnedJobs[1].Id);
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(0, 20), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllJobs_WithCustomParameters_ReturnsOkResult()
+        {
+            // Arrange
+            var skip = 10;
+            var limit = 5;
+            var expectedJobs = new List<JobResponse>
+            {
+                new JobResponse
+                {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = "Job 1",
+                    ImprovedText = "Improved Job 1",
+                    UserEmail = "user1@example.com",
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync(expectedJobs);
+
+            // Act
+            var result = await _controller.GetAllJobs(skip, limit);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var returnedJobs = Assert.IsType<List<JobResponse>>(okResult.Value);
+            Assert.Single(returnedJobs);
+            Assert.Equal(expectedJobs[0].Id, returnedJobs[0].Id);
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllJobs_WithEmptyResult_ReturnsEmptyList()
+        {
+            // Arrange
+            var expectedJobs = new List<JobResponse>();
+
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(0, 20))
+                .ReturnsAsync(expectedJobs);
+
+            // Act
+            var result = await _controller.GetAllJobs();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var returnedJobs = Assert.IsType<List<JobResponse>>(okResult.Value);
+            Assert.Empty(returnedJobs);
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(0, 20), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllJobs_JobServiceThrowsException_ReturnsInternalServerError()
+        {
+            // Arrange
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(It.IsAny<int>(), It.IsAny<int>()))
+                .ThrowsAsync(new Exception("Service error"));
+
+            // Act
+            var result = await _controller.GetAllJobs();
+
+            // Assert
+            var statusCodeResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, statusCodeResult.StatusCode);
+            Assert.Equal("Error retrieving jobs", statusCodeResult.Value);
+        }
+
+        #endregion
+
+        #region GetUserJobs Tests
+
+        [Fact]
+        public async Task GetUserJobs_WithValidEmail_ReturnsOkResult()
+        {
+            // Arrange
+            var userEmail = "test@example.com";
+            var expectedJobs = new List<JobDescription>
+            {
+                new JobDescription
+                {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = "User Job 1",
+                    ImprovedText = "Improved User Job 1",
+                    UserEmail = userEmail,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new JobDescription
+                {
+                    Id = "507f1f77bcf86cd799439012",
+                    OriginalText = "User Job 2",
+                    ImprovedText = "Improved User Job 2",
+                    UserEmail = userEmail,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+
+            _mockJobService
+                .Setup(service => service.GetByUserEmailAsync(userEmail))
+                .ReturnsAsync(expectedJobs);
+
+            // Act
+            var result = await _controller.GetUserJobs(userEmail);
+
+            // Assert
+            var actionResult = Assert.IsType<ActionResult<List<JobDescription>>>(result);
+            var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+            var returnedJobs = Assert.IsType<List<JobDescription>>(okResult.Value);
+            Assert.Equal(2, returnedJobs.Count);
+            Assert.All(returnedJobs, job => Assert.Equal(userEmail, job.UserEmail));
+
+            _mockJobService.Verify(service => service.GetByUserEmailAsync(userEmail), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetUserJobs_JobServiceThrowsException_ReturnsInternalServerError()
+        {
+            // Arrange
+            var userEmail = "test@example.com";
+
+            _mockJobService
+                .Setup(service => service.GetByUserEmailAsync(userEmail))
+                .ThrowsAsync(new Exception("Service error"));
+
+            // Act
+            var result = await _controller.GetUserJobs(userEmail);
+
+            // Assert
+            var actionResult = Assert.IsType<ActionResult<List<JobDescription>>>(result);
+            var statusCodeResult = Assert.IsType<ObjectResult>(actionResult.Result);
+            Assert.Equal(500, statusCodeResult.StatusCode);
+            Assert.Equal("Internal server error", statusCodeResult.Value);
+        }
+
+        #endregion
     }
 }

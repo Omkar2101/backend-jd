@@ -9,11 +9,11 @@ namespace backend_jd_api.Data
         {
             var collection = database.GetCollection<JobDescription>("JobDescriptions");
 
-            // // Check if collection is empty
-            // if ((await collection.CountDocumentsAsync(FilterDefinition<JobDescription>.Empty)) > 0)
-            // {
-            //     return; // Data already exists
-            // }
+            // Check if collection is empty
+            if ((await collection.CountDocumentsAsync(FilterDefinition<JobDescription>.Empty)) > 0)
+            {
+                return; // Data already exists
+            }
 
             var dummyJobs = new List<JobDescription>
             {
