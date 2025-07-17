@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using backend_jd_api.Models;
 using backend_jd_api.Services;
+using System.Text.RegularExpressions;
 
 namespace backend_jd_api.Controllers
 {
@@ -8,13 +9,89 @@ namespace backend_jd_api.Controllers
     [Route("api/jobs")]
     public class JobController : ControllerBase
     {
-        private readonly JobService _jobService;
+        // private readonly JobService _jobService;
+        private readonly IJobService _jobService;
         private readonly ILogger<JobController> _logger;
 
-        public JobController(JobService jobService, ILogger<JobController> logger)
+        public JobController(IJobService jobService, ILogger<JobController> logger)
         {
             _jobService = jobService;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Validates if the provided text is a valid job description
+        /// </summary>
+        private (bool isValid, string errorMessage) ValidateJobDescriptionText(string text)
+        {
+            var trimmedText = text.Trim();
+
+            // Check minimum length
+            if (trimmedText.Length < 50)
+            {
+                return (false, $"Job description text must be at least 50 characters long. Current length: {trimmedText.Length} characters");
+            }
+
+            // Check for repetitive characters (more than 5 consecutive same characters)
+            var repetitivePattern = new Regex(@"(.)\1{5,}");
+            if (repetitivePattern.IsMatch(trimmedText))
+            {
+                return (false, "Text contains too many repetitive characters. Please provide a proper job description.");
+            }
+
+            // Check for excessive special characters
+            var specialCharPattern = new Regex(@"[^\w\s.,!?;:()\-'""/]");
+            var specialCharMatches = specialCharPattern.Matches(trimmedText);
+            var specialCharRatio = (double)specialCharMatches.Count / trimmedText.Length;
+            if (specialCharRatio > 0.3)
+            {
+                return (false, "Text contains too many special characters. Please provide a valid job description.");
+            }
+
+            // Check for meaningful words (at least 10 words with 3+ characters)
+            var words = trimmedText.Split(new char[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            var meaningfulWords = words.Where(word =>
+                Regex.Replace(word, @"[^\w]", "").Length >= 3
+            ).ToList();
+
+            if (meaningfulWords.Count < 10)
+            {
+                return (false, "Please provide a more detailed job description with proper words.");
+            }
+
+            // Check for common job-related keywords
+            var jobKeywords = new[]
+            {
+                "job", "position", "role", "responsibilities", "requirements", "experience",
+                "skills", "qualifications", "candidate", "work", "team", "company",
+                "duties", "tasks", "developer", "manager", "analyst", "engineer", "coordinator",
+                "employment", "hiring", "recruit", "apply", "application", "resume", "cv",
+                "salary", "benefits", "location", "remote", "office", "department"
+            };
+
+            var textLower = trimmedText.ToLower();
+            var hasJobKeywords = jobKeywords.Any(keyword => textLower.Contains(keyword));
+
+            if (!hasJobKeywords)
+            {
+                return (false, "Text doesn't appear to be a job description. Please provide a valid job posting.");
+            }
+
+            // Check if text is mostly gibberish (low vowel-to-consonant ratio)
+            var vowels = "aeiouAEIOU";
+            var vowelCount = trimmedText.Count(c => vowels.Contains(c));
+            var consonantCount = trimmedText.Count(c => char.IsLetter(c) && !vowels.Contains(c));
+
+            if (consonantCount > 0)
+            {
+                var vowelRatio = (double)vowelCount / consonantCount;
+                if (vowelRatio < 0.2) // Very low vowel ratio indicates gibberish
+                {
+                    return (false, "Text appears to be invalid. Please provide a proper job description.");
+                }
+            }
+
+            return (true, string.Empty);
         }
 
         /// <summary>
@@ -62,11 +139,18 @@ namespace backend_jd_api.Controllers
                 if (string.IsNullOrEmpty(request.Text))
                     return BadRequest("Text is required");
 
-                if (request.Text.Trim().Length < 50)
-                    return BadRequest($"Job description text must be at least 50 characters long. Current length: {request.Text.Trim().Length} characters");
+
 
                 if (string.IsNullOrEmpty(request.UserEmail))
                     return BadRequest("User email is required");
+
+
+                // Enhanced text validation
+                var validation = ValidateJobDescriptionText(request.Text);
+                if (!validation.isValid)
+                {
+                    return BadRequest(validation.errorMessage);
+                }
 
                 var response = await _jobService.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle);
                 return Ok(response);
@@ -126,6 +210,9 @@ namespace backend_jd_api.Controllers
             try
             {
                 var jobs = await _jobService.GetByUserEmailAsync(email);
+                // if (jobs == null || !jobs.Any())
+                // return NotFound("No jobs found for the provided email.");
+
                 return Ok(jobs);
             }
             catch (Exception ex)
@@ -135,13 +222,32 @@ namespace backend_jd_api.Controllers
             }
         }
 
-        // /// <summary>
-        // /// Health check endpoint
-        // /// </summary>
-        // [HttpGet("health")]
-        // public IActionResult Health()
-        // {
-        //     return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
-        // }
+
+        /// <summary>
+        /// Delete a specific job description by ID
+        /// </summary>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteJob(string id)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(id))
+                    return BadRequest("Job ID is required");
+
+                var deleted = await _jobService.DeleteJobAsync(id);
+
+                if (!deleted)
+                    return NotFound($"Job with ID {id} not found");
+
+                return Ok(new { message = "Job deleted successfully", id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting job {Id}", id);
+                return StatusCode(500, "An error occurred while deleting the job. Please try again.");
+            }
+        }
+
+
     }
 }
