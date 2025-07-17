@@ -121,7 +121,8 @@ namespace backend_jd_api.Services
                 // var result = JsonSerializer.Deserialize<TextExtractionResponse>(responseJson,
                 //      new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-                return await response.Content.ReadAsStringAsync(); //this line is making the erreo why is ti there and why it will be problemantic
+                // return await response.Content.ReadAsStringAsync(); //this line is making the erreo why is ti there and why it will be problemantic
+                return responseJson;
                 // return result?.Text ?? string.Empty;
             }
             catch (Exception ex)

@@ -30,6 +30,8 @@ namespace backend_jd_api.Models
         public string Id { get; set; } = string.Empty;
         public string OriginalText { get; set; } = string.Empty;
         public string ImprovedText { get; set; } = string.Empty;
+
+        // public string OverallAssessment { get; set; } = string.Empty; // Add this line
         public string UserEmail { get; set; } = string.Empty;  // Add this line
         public AnalysisResult? Analysis { get; set; }
         public DateTime CreatedAt { get; set; }

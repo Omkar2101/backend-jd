@@ -3,11 +3,23 @@ using backend_jd_api.Models;
 using MongoDB.Driver;
 
 namespace backend_jd_api.Services
+
 {
+    
+    // Create IJobService interface
+    public interface IJobService
+    {
+        Task<List<JobDescription>> GetByUserEmailAsync(string email);
+        Task<JobResponse> AnalyzeFromFileAsync(IFormFile file, string userEmail);
+        Task<JobResponse> AnalyzeTextAsync(string text, string userEmail, string? jobTitle = null);
+        Task<JobResponse?> GetJobAsync(string id);
+        Task<List<JobResponse>> GetAllJobsAsync(int skip = 0, int limit = 20);
+        Task<bool> DeleteJobAsync(string id);
+    }
     /// <summary>
     /// Service for handling job description analysis, storage, and retrieval operations
     /// </summary>
-    public class JobService
+    public class JobService: IJobService
     {
         private readonly MongoDbContext _db;
         private readonly PythonService _pythonService;
@@ -25,6 +37,26 @@ namespace backend_jd_api.Services
             _pythonService = pythonService;
             _logger = logger;
         }
+
+        /// <summary>
+        /// Deletes a job description by its ID
+        /// </summary>
+        /// <param name="id">The unique identifier of the job description</param>
+        /// <returns>True if deleted, false if not found</returns>
+        public async Task<bool> DeleteJobAsync(string id)
+        {
+            try
+            {
+                return await _db.DeleteJobAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting job {Id}", id);
+                throw;
+            }
+        }
+
+     
 
         /// <summary>
         /// Analyzes a job description from an uploaded file
@@ -78,6 +110,7 @@ namespace backend_jd_api.Services
                     UserEmail = userEmail,
                     OriginalText = text,
                     ImprovedText = analysis.ImprovedText ?? string.Empty,
+                    // OverallAssessment = analysis.overall_assessment, // Add overall assessment
                     FileName = file.FileName,
                     CreatedAt = DateTime.UtcNow,
                     Analysis = analysis
@@ -91,6 +124,7 @@ namespace backend_jd_api.Services
                     UserEmail = savedJob.UserEmail,
                     OriginalText = savedJob.OriginalText,
                     ImprovedText = savedJob.ImprovedText,
+                    // OverallAssessment = savedJob.OverallAssessment, // Add this line
                     FileName = savedJob.FileName,
                     CreatedAt = savedJob.CreatedAt,
                     Analysis = savedJob.Analysis
@@ -131,7 +165,7 @@ namespace backend_jd_api.Services
 
                 _logger.LogInformation("Analyzing text with length: {Length} characters", text.Length);
 
-                
+
                 // Analyze text
                 var analysis = await _pythonService.AnalyzeTextAsync(text);
                 _logger.LogInformation("Text analysis completed successfully{analysis}", analysis);
@@ -141,6 +175,7 @@ namespace backend_jd_api.Services
                 {
                     OriginalText = text,
                     ImprovedText = analysis.ImprovedText,
+                    // OverallAssessment = analysis.overall_assessment, // Add overall assessment
                     FileName = jobTitle ?? "Direct Input",
                     UserEmail = userEmail,  // Add the email
                     Analysis = analysis,
@@ -189,7 +224,7 @@ namespace backend_jd_api.Services
         /// <returns>List of job descriptions belonging to the user</returns>
         /// <exception cref="ArgumentException">Thrown when email is null or empty</exception>
         /// <exception cref="Exception">Thrown when database operation fails</exception>
-        public async Task<List<JobDescription>> GetByUserEmailAsync(string email)
+        public virtual async Task<List<JobDescription>> GetByUserEmailAsync(string email)
         {
             try
             {
@@ -224,6 +259,7 @@ namespace backend_jd_api.Services
             {
                 Id = job.Id,
                 OriginalText = job.OriginalText,
+                // OverallAssessment = job.OverallAssessment, // Add this line
                 ImprovedText = job.ImprovedText,
                 UserEmail = job.UserEmail,  // Add this line
                 Analysis = job.Analysis,
