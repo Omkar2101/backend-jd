@@ -27,10 +27,13 @@ namespace backend_jd_api.Models
     }
 
     public class AnalysisResult
+    
     {
         public double bias_score { get; set; }
         public double inclusivity_score { get; set; }
         public double clarity_score { get; set; }
+        public string role { get; set; } = string.Empty;
+        public string industry { get; set; } = string.Empty;
 
         // Add this property to capture improved_text from Python
         [JsonPropertyName("improved_text")]

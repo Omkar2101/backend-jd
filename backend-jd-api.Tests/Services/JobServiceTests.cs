@@ -1,3 +1,4 @@
+
 using Xunit;
 using Moq;
 using Microsoft.Extensions.Logging;
@@ -31,13 +32,21 @@ namespace backend_jd_api.Tests.Services
             var file = CreateMockFile("test.pdf", "This is a valid job description with more than 50 characters to meet the minimum requirements.");
             var userEmail = "test@example.com";
             var extractedText = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var analysisResult = new AnalysisResult
+            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
             {
                 ImprovedText = "Improved job description",
+                bias_score = 0.2,
+                inclusivity_score = 0.8,
+                clarity_score = 0.9,
+                role = "Software Engineer",
+                industry = "Technology",
+                overall_assessment = "Good job description with minor improvements needed",
+                Issues = new List<Issue>(),
+                seo_keywords = new List<string> { "software", "engineer", "development" },
                 suggestions = new List<Suggestion>
                 {
-                    new Suggestion {  Original = "Suggestion 1" },
-                    new Suggestion {  Original = "Suggestion 2" }
+                    new Suggestion { Original = "Suggestion 1", Improved = "Improved 1", rationale = "Better clarity", Category = "Clarity" },
+                    new Suggestion { Original = "Suggestion 2", Improved = "Improved 2", rationale = "More inclusive", Category = "Bias" }
                 }
             };
             var savedJob = new JobDescription
@@ -128,7 +137,19 @@ namespace backend_jd_api.Tests.Services
             var file = CreateMockFile("test.txt", "content");
             var userEmail = "test@example.com";
             var extractedText = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var analysisResult = new AnalysisResult { ImprovedText = "Improved text" };
+            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
+            { 
+                ImprovedText = "Improved text",
+                bias_score = 0.3,
+                inclusivity_score = 0.7,
+                clarity_score = 0.8,
+                role = "Developer",
+                industry = "Technology",
+                overall_assessment = "Needs improvement",
+                Issues = new List<Issue>(),
+                suggestions = new List<Suggestion>(),
+                seo_keywords = new List<string>()
+            };
             var dbException = new Exception("Database error");
             _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync(extractedText);
             _mockPythonService.Setup(x => x.AnalyzeTextAsync(extractedText)).ReturnsAsync(analysisResult);
@@ -143,12 +164,20 @@ namespace backend_jd_api.Tests.Services
             var text = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
             var userEmail = "test@example.com";
             var jobTitle = "Software Engineer";
-            var analysisResult = new AnalysisResult
+            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
             {
                 ImprovedText = "Improved job description",
+                bias_score = 0.1,
+                inclusivity_score = 0.9,
+                clarity_score = 0.85,
+                role = "Software Engineer",
+                industry = "Technology",
+                overall_assessment = "Excellent job description",
+                Issues = new List<Issue>(),
+                seo_keywords = new List<string> { "software", "engineer", "programming" },
                 suggestions = new List<Suggestion>
                 {
-                    new Suggestion { Original = "Suggestion 1" }
+                    new Suggestion { Original = "Suggestion 1", Improved = "Better suggestion 1", rationale = "More inclusive language", Category = "Bias" }
                 }
             };
             var savedJob = new JobDescription
@@ -218,7 +247,19 @@ namespace backend_jd_api.Tests.Services
         {
             var text = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
             var userEmail = "test@example.com";
-            var analysisResult = new AnalysisResult { ImprovedText = "Improved text" };
+            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
+            { 
+                ImprovedText = "Improved text",
+                bias_score = 0.25,
+                inclusivity_score = 0.75,
+                clarity_score = 0.8,
+                role = "General Position",
+                industry = "Various",
+                overall_assessment = "Standard job description",
+                Issues = new List<Issue>(),
+                suggestions = new List<Suggestion>(),
+                seo_keywords = new List<string>()
+            };
             var savedJob = new JobDescription
             {
                 Id = "123",
@@ -258,7 +299,19 @@ namespace backend_jd_api.Tests.Services
                 OriginalText = "Original text",
                 ImprovedText = "Improved text",
                 FileName = "test.txt",
-                Analysis = new AnalysisResult(),
+                Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
+                {
+                    bias_score = 0.2,
+                    inclusivity_score = 0.8,
+                    clarity_score = 0.9,
+                    role = "Analyst",
+                    industry = "Business",
+                    overall_assessment = "Well-structured job description",
+                    ImprovedText = "Improved text",
+                    Issues = new List<Issue>(),
+                    suggestions = new List<Suggestion>(),
+                    seo_keywords = new List<string>()
+                },
                 CreatedAt = DateTime.UtcNow
             };
             _mockDb.Setup(x => x.GetJobAsync(jobId)).ReturnsAsync(job);
@@ -295,8 +348,48 @@ namespace backend_jd_api.Tests.Services
         {
             var jobs = new List<JobDescription>
             {
-                new JobDescription { Id = "1", UserEmail = "user1@example.com", OriginalText = "Text1", ImprovedText = "Improved1", FileName = "file1.txt", Analysis = new AnalysisResult(), CreatedAt = DateTime.UtcNow },
-                new JobDescription { Id = "2", UserEmail = "user2@example.com", OriginalText = "Text2", ImprovedText = "Improved2", FileName = "file2.txt", Analysis = new AnalysisResult(), CreatedAt = DateTime.UtcNow }
+                new JobDescription { 
+                    Id = "1", 
+                    UserEmail = "user1@example.com", 
+                    OriginalText = "Text1", 
+                    ImprovedText = "Improved1", 
+                    FileName = "file1.txt", 
+                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
+                    {
+                        bias_score = 0.1,
+                        inclusivity_score = 0.9,
+                        clarity_score = 0.8,
+                        role = "Developer",
+                        industry = "Technology",
+                        overall_assessment = "Good job description",
+                        ImprovedText = "Improved1",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>(),
+                        seo_keywords = new List<string>()
+                    }, 
+                    CreatedAt = DateTime.UtcNow 
+                },
+                new JobDescription { 
+                    Id = "2", 
+                    UserEmail = "user2@example.com", 
+                    OriginalText = "Text2", 
+                    ImprovedText = "Improved2", 
+                    FileName = "file2.txt", 
+                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
+                    {
+                        bias_score = 0.3,
+                        inclusivity_score = 0.7,
+                        clarity_score = 0.9,
+                        role = "Manager",
+                        industry = "Finance",
+                        overall_assessment = "Needs minor improvements",
+                        ImprovedText = "Improved2",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>(),
+                        seo_keywords = new List<string>()
+                    }, 
+                    CreatedAt = DateTime.UtcNow 
+                }
             };
             _mockDb.Setup(x => x.GetAllJobsAsync(0, 20)).ReturnsAsync(jobs);
             var result = await _jobService.GetAllJobsAsync();
@@ -311,7 +404,27 @@ namespace backend_jd_api.Tests.Services
         {
             var jobs = new List<JobDescription>
             {
-                new JobDescription { Id = "3", UserEmail = "user3@example.com", OriginalText = "Text3", ImprovedText = "Improved3", FileName = "file3.txt", Analysis = new AnalysisResult(), CreatedAt = DateTime.UtcNow }
+                new JobDescription { 
+                    Id = "3", 
+                    UserEmail = "user3@example.com", 
+                    OriginalText = "Text3", 
+                    ImprovedText = "Improved3", 
+                    FileName = "file3.txt", 
+                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
+                    {
+                        bias_score = 0.2,
+                        inclusivity_score = 0.8,
+                        clarity_score = 0.85,
+                        role = "Consultant",
+                        industry = "Healthcare",
+                        overall_assessment = "Professional job description",
+                        ImprovedText = "Improved3",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>(),
+                        seo_keywords = new List<string>()
+                    }, 
+                    CreatedAt = DateTime.UtcNow 
+                }
             };
             _mockDb.Setup(x => x.GetAllJobsAsync(10, 5)).ReturnsAsync(jobs);
             var result = await _jobService.GetAllJobsAsync(10, 5);
@@ -382,7 +495,6 @@ namespace backend_jd_api.Tests.Services
         //     Assert.Empty(result);
         // }
 
-
         // [Fact]
         // public async Task GetByUserEmailAsync_DatabaseThrowsException_LogsErrorAndRethrows()
         // {
@@ -435,7 +547,5 @@ namespace backend_jd_api.Tests.Services
             
             _mockDb.Setup(x => x.Jobs).Returns(mockCollection.Object);
         }
-
-        
     }
 }

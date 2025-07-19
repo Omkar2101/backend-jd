@@ -11,7 +11,7 @@ export let options = {
   ],
 };
 
-const baseUrl = "http://localhost:5268/api/jobs"; // Update if needed
+const baseUrl = "http://localhost:5268/api/jobs"; 
 
 export default function () {
   // 1. GET all jobs with pagination
@@ -23,11 +23,11 @@ export default function () {
   sleep(1);
 
   // 2. GET job by known ID (optional — replace with real test ID)
-  const testJobId = "686faf65a06ca8bed87d201b"; // Replace with actual ID or remove block
+  const testJobId = "686faf65a06ca8bed87d201b"; 
   if (testJobId) {
     let jobByIdRes = http.get(`${baseUrl}/${testJobId}`);
     check(jobByIdRes, {
-      "✅ GET job by ID: status 200 or 404": (r) =>
+      " GET job by ID: status 200 or 404": (r) =>
         r.status === 200 || r.status === 404,
     });
   }
@@ -38,7 +38,7 @@ export default function () {
   const testEmail = "rathod@gmail.com"; // Replace with a valid test email
   let userJobsRes = http.get(`${baseUrl}/user/${encodeURIComponent(testEmail)}`);
   check(userJobsRes, {
-    "✅ GET user jobs: status 200 or 404": (r) =>
+    " GET user jobs: status 200 or 404": (r) =>
       r.status === 200 || r.status === 404,
   });
 

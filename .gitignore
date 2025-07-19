@@ -1,0 +1,74 @@
+## Ignore build results
+bin/
+obj/
+out/
+
+## User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
+
+## DotCover
+.idea/
+*.dotCover
+
+## Rider IDE
+.idea/
+*.sln.iml
+
+## Visual Studio Code
+.vscode/
+
+## Package outputs
+*.nupkg
+*.snupkg
+packages/
+
+## Logs
+*.log
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+*.testsettings
+*.vsmdi
+
+## Web publish
+.publish/
+
+## Docker artifacts
+*.dockerfile
+docker-compose.override.yml
+
+## Auto-generated files
+Generated_Code/
+
+## Secrets (manually)
+.env
+secrets.json
+
+## Entity Framework
+Migrations/
+
+## Global tools restore
+.tools/
+
+## NuGet
+*.nupkg
+.nuget/
+
+# Others
+_ReSharper*/
+*.resharper
+*.cache
+*.dbmdl
+
+# Mac
+.DS_Store
+
+# Windows thumbnail cache
+Thumbs.db
