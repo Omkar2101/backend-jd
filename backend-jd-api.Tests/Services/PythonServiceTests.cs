@@ -1,3 +1,4 @@
+
 using Xunit;
 using Moq;
 using Moq.Protected;
@@ -41,9 +42,26 @@ namespace backend_jd_api.Tests.Services
         {
             // Arrange
             var text = "Test job description";
-            var expectedResult = new AnalysisResult
+            var expectedResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
             {
                 ImprovedText = "Improved job description",
+                bias_score = 0.2,
+                inclusivity_score = 0.8,
+                clarity_score = 0.9,
+                role = "Software Engineer",
+                industry = "Technology",
+                overall_assessment = "Good job description with minor improvements needed",
+                Issues = new List<Issue>
+                {
+                    new Issue
+                    {
+                        Type = "Gender",
+                        Text = "Use of gendered language",
+                        Severity = "Medium",
+                        Explanation = "Consider using more inclusive language"
+                    }
+                },
+                seo_keywords = new List<string> { "software", "engineer", "development", "technology" },
                 suggestions = new List<Suggestion>
                 {
                     new Suggestion 
@@ -62,7 +80,6 @@ namespace backend_jd_api.Tests.Services
                     }
                 }
             };
-
 
             var response = new HttpResponseMessage
             {
@@ -84,10 +101,22 @@ namespace backend_jd_api.Tests.Services
             // _mockLogger.Object.LogInformation("Analysis Result: {@Result}", result);
             Console.WriteLine("Analysis Result: " + JsonSerializer.Serialize(result));
 
-
             // Assert
             Assert.NotNull(result);
             Assert.Equal("Improved job description", result.ImprovedText);
+            // **ADDED: Assert for new schema fields**
+            Assert.Equal(0.2, result.bias_score);
+            Assert.Equal(0.8, result.inclusivity_score);
+            Assert.Equal(0.9, result.clarity_score);
+            Assert.Equal("Software Engineer", result.role);
+            Assert.Equal("Technology", result.industry);
+            Assert.Equal("Good job description with minor improvements needed", result.overall_assessment);
+            Assert.NotNull(result.Issues);
+            Assert.Single(result.Issues);
+            Assert.Equal("Gender", result.Issues[0].Type);
+            Assert.NotNull(result.seo_keywords);
+            Assert.Equal(4, result.seo_keywords.Count);
+            Assert.Contains("software", result.seo_keywords);
             Assert.NotNull(result.suggestions);
             Assert.Equal(2, result.suggestions.Count);
             Assert.Equal("Suggestion 1", result.suggestions[0].Original);
@@ -124,8 +153,6 @@ namespace backend_jd_api.Tests.Services
             await Assert.ThrowsAsync<HttpRequestException>(() =>
                 _service.AnalyzeTextAsync(text));
         }
-
-        
 
         [Fact]
         public async Task AnalyzeTextAsync_WithInvalidResponse_ThrowsException()

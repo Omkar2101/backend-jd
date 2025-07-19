@@ -1,4 +1,5 @@
 
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -68,6 +69,10 @@ namespace backend_jd_api.Tests.Controllers
                 Analysis = new AnalysisResult
                 {
                     ImprovedText = "Improved job description content",
+                    role = "Software Developer", // CHANGED: Added role field
+                    industry = "Technology", // CHANGED: Added industry field
+                    overall_assessment = "Good job description with minor improvements needed", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue>(), // CHANGED: Added Issues list
                     suggestions = new List<Suggestion>()
                 }
             };
@@ -223,6 +228,10 @@ namespace backend_jd_api.Tests.Controllers
                 Analysis = new AnalysisResult
                 {
                     ImprovedText = "Improved content",
+                    role = "Software Developer", // CHANGED: Added role field
+                    industry = "Technology", // CHANGED: Added industry field
+                    overall_assessment = "Good job description", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue>(), // CHANGED: Added Issues list
                     suggestions = new List<Suggestion>()
                 }
             };
@@ -287,6 +296,10 @@ namespace backend_jd_api.Tests.Controllers
                 Analysis = new AnalysisResult
                 {
                     ImprovedText = "Improved content",
+                    role = "Software Developer", // CHANGED: Added role field
+                    industry = "Technology", // CHANGED: Added industry field
+                    overall_assessment = "Good job description", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue>(), // CHANGED: Added Issues list
                     suggestions = new List<Suggestion>()
                 }
             };
@@ -327,6 +340,19 @@ namespace backend_jd_api.Tests.Controllers
                     bias_score = 0.2,
                     inclusivity_score = 0.8,
                     clarity_score = 0.9,
+                    role = "Software Developer", // CHANGED: Added role field
+                    industry = "Technology", // CHANGED: Added industry field
+                    overall_assessment = "Excellent job description with minimal bias", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue> // CHANGED: Added Issues list with sample data
+                    {
+                        new Issue
+                        {
+                            Type = "Gender",
+                            Text = "guys",
+                            Severity = "Medium",
+                            Explanation = "This term may exclude non-male team members"
+                        }
+                    },
                     suggestions = new List<Suggestion>
                     {
                         new Suggestion
@@ -359,6 +385,11 @@ namespace backend_jd_api.Tests.Controllers
             Assert.Equal(expectedResponse.Analysis.bias_score, response.Analysis.bias_score);
             Assert.Equal(expectedResponse.Analysis.inclusivity_score, response.Analysis.inclusivity_score);
             Assert.Equal(expectedResponse.Analysis.clarity_score, response.Analysis.clarity_score);
+            // CHANGED: Added assertions for new fields
+            Assert.Equal(expectedResponse.Analysis.role, response.Analysis.role);
+            Assert.Equal(expectedResponse.Analysis.industry, response.Analysis.industry);
+            Assert.Equal(expectedResponse.Analysis.overall_assessment, response.Analysis.overall_assessment);
+            Assert.Single(response.Analysis.Issues);
 
             // Verify service calls
             _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
@@ -493,7 +524,7 @@ namespace backend_jd_api.Tests.Controllers
             Assert.Equal("User email is required", badRequestResult.Value);
         }
 
-        
+
 
         [Fact]
         public async Task AnalyzeText_WithoutJobTitle_ProcessesSuccessfully()
@@ -516,6 +547,10 @@ namespace backend_jd_api.Tests.Controllers
                 Analysis = new AnalysisResult
                 {
                     ImprovedText = "Improved content",
+                    role = "General", // CHANGED: Added role field
+                    industry = "Various", // CHANGED: Added industry field
+                    overall_assessment = "Good job description", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue>(), // CHANGED: Added Issues list
                     suggestions = new List<Suggestion>()
                 }
             };
@@ -650,7 +685,7 @@ namespace backend_jd_api.Tests.Controllers
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal("Text appears to be invalid. Please provide a proper job description.", badRequestResult.Value);
         }
-       
+
 
 
         #region GetJob Tests
@@ -673,6 +708,10 @@ namespace backend_jd_api.Tests.Controllers
                     bias_score = 0.3,
                     inclusivity_score = 0.7,
                     clarity_score = 0.8,
+                    role = "Software Engineer", // CHANGED: Added role field
+                    industry = "Technology", // CHANGED: Added industry field
+                    overall_assessment = "Well-structured job description", // CHANGED: Added overall_assessment field
+                    Issues = new List<Issue>(), // CHANGED: Added Issues list
                     suggestions = new List<Suggestion>()
                 }
             };
@@ -733,7 +772,6 @@ namespace backend_jd_api.Tests.Controllers
         }
 
         #endregion
-
         #region GetAllJobs Tests
 
         [Fact]
@@ -741,24 +779,44 @@ namespace backend_jd_api.Tests.Controllers
         {
             // Arrange
             var expectedJobs = new List<JobResponse>
+    {
+        new JobResponse
+        {
+            Id = "507f1f77bcf86cd799439011",
+            OriginalText = "Job 1",
+            ImprovedText = "Improved Job 1",
+            UserEmail = "user1@example.com",
+            CreatedAt = DateTime.UtcNow,
+            FileName = "job1.pdf",  // **ADDED: FileName field**
+            Analysis = new AnalysisResult  // **ADDED: Analysis with role and industry**
             {
-                new JobResponse
-                {
-                    Id = "507f1f77bcf86cd799439011",
-                    OriginalText = "Job 1",
-                    ImprovedText = "Improved Job 1",
-                    UserEmail = "user1@example.com",
-                    CreatedAt = DateTime.UtcNow
-                },
-                new JobResponse
-                {
-                    Id = "507f1f77bcf86cd799439012",
-                    OriginalText = "Job 2",
-                    ImprovedText = "Improved Job 2",
-                    UserEmail = "user2@example.com",
-                    CreatedAt = DateTime.UtcNow
-                }
-            };
+                bias_score = 0.2,
+                inclusivity_score = 0.8,
+                clarity_score = 0.9,
+                role = "Software Engineer",
+                industry = "Technology",
+                overall_assessment = "Good job description with minor improvements needed"
+            }
+        },
+        new JobResponse
+        {
+            Id = "507f1f77bcf86cd799439012",
+            OriginalText = "Job 2",
+            ImprovedText = "Improved Job 2",
+            UserEmail = "user2@example.com",
+            CreatedAt = DateTime.UtcNow,
+            FileName = "job2.pdf",  // **ADDED: FileName field**
+            Analysis = new AnalysisResult  // **ADDED: Analysis with role and industry**
+            {
+                bias_score = 0.1,
+                inclusivity_score = 0.9,
+                clarity_score = 0.8,
+                role = "Product Manager",
+                industry = "Finance",
+                overall_assessment = "Excellent job description"
+            }
+        }
+    };
 
             _mockJobService
                 .Setup(s => s.GetAllJobsAsync(0, 20))
@@ -773,6 +831,11 @@ namespace backend_jd_api.Tests.Controllers
             Assert.Equal(2, returnedJobs.Count);
             Assert.Equal(expectedJobs[0].Id, returnedJobs[0].Id);
             Assert.Equal(expectedJobs[1].Id, returnedJobs[1].Id);
+            // **ADDED: Assert for Analysis fields**
+            Assert.Equal("Software Engineer", returnedJobs[0].Analysis?.role);
+            Assert.Equal("Technology", returnedJobs[0].Analysis?.industry);
+            Assert.Equal("Product Manager", returnedJobs[1].Analysis?.role);
+            Assert.Equal("Finance", returnedJobs[1].Analysis?.industry);
 
             _mockJobService.Verify(s => s.GetAllJobsAsync(0, 20), Times.Once);
         }
@@ -784,16 +847,26 @@ namespace backend_jd_api.Tests.Controllers
             var skip = 10;
             var limit = 5;
             var expectedJobs = new List<JobResponse>
+    {
+        new JobResponse
+        {
+            Id = "507f1f77bcf86cd799439011",
+            OriginalText = "Job 1",
+            ImprovedText = "Improved Job 1",
+            UserEmail = "user1@example.com",
+            CreatedAt = DateTime.UtcNow,
+            FileName = "job1.pdf",  // **ADDED: FileName field**
+            Analysis = new AnalysisResult  // **ADDED: Analysis with role and industry**
             {
-                new JobResponse
-                {
-                    Id = "507f1f77bcf86cd799439011",
-                    OriginalText = "Job 1",
-                    ImprovedText = "Improved Job 1",
-                    UserEmail = "user1@example.com",
-                    CreatedAt = DateTime.UtcNow
-                }
-            };
+                bias_score = 0.3,
+                inclusivity_score = 0.7,
+                clarity_score = 0.8,
+                role = "Data Scientist",
+                industry = "Healthcare",
+                overall_assessment = "Good job description"
+            }
+        }
+    };
 
             _mockJobService
                 .Setup(s => s.GetAllJobsAsync(skip, limit))
@@ -807,6 +880,9 @@ namespace backend_jd_api.Tests.Controllers
             var returnedJobs = Assert.IsType<List<JobResponse>>(okResult.Value);
             Assert.Single(returnedJobs);
             Assert.Equal(expectedJobs[0].Id, returnedJobs[0].Id);
+            // **ADDED: Assert for Analysis fields**
+            Assert.Equal("Data Scientist", returnedJobs[0].Analysis?.role);
+            Assert.Equal("Healthcare", returnedJobs[0].Analysis?.industry);
 
             _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
         }
@@ -859,24 +935,44 @@ namespace backend_jd_api.Tests.Controllers
             // Arrange
             var userEmail = "test@example.com";
             var expectedJobs = new List<JobDescription>
+    {
+        new JobDescription
+        {
+            Id = "507f1f77bcf86cd799439011",
+            OriginalText = "User Job 1",
+            ImprovedText = "Improved User Job 1",
+            UserEmail = userEmail,
+            CreatedAt = DateTime.UtcNow,
+            FileName = "user_job1.pdf",  // **ADDED: FileName field**
+            Analysis = new AnalysisResult  // **ADDED: Analysis with role and industry**
             {
-                new JobDescription
-                {
-                    Id = "507f1f77bcf86cd799439011",
-                    OriginalText = "User Job 1",
-                    ImprovedText = "Improved User Job 1",
-                    UserEmail = userEmail,
-                    CreatedAt = DateTime.UtcNow
-                },
-                new JobDescription
-                {
-                    Id = "507f1f77bcf86cd799439012",
-                    OriginalText = "User Job 2",
-                    ImprovedText = "Improved User Job 2",
-                    UserEmail = userEmail,
-                    CreatedAt = DateTime.UtcNow
-                }
-            };
+                bias_score = 0.2,
+                inclusivity_score = 0.8,
+                clarity_score = 0.9,
+                role = "Marketing Manager",
+                industry = "E-commerce",
+                overall_assessment = "Well-structured job description"
+            }
+        },
+        new JobDescription
+        {
+            Id = "507f1f77bcf86cd799439012",
+            OriginalText = "User Job 2",
+            ImprovedText = "Improved User Job 2",
+            UserEmail = userEmail,
+            CreatedAt = DateTime.UtcNow,
+            FileName = "user_job2.pdf",  // **ADDED: FileName field**
+            Analysis = new AnalysisResult  // **ADDED: Analysis with role and industry**
+            {
+                bias_score = 0.1,
+                inclusivity_score = 0.9,
+                clarity_score = 0.8,
+                role = "UX Designer",
+                industry = "Technology",
+                overall_assessment = "Excellent inclusive job posting"
+            }
+        }
+    };
 
             _mockJobService
                 .Setup(service => service.GetByUserEmailAsync(userEmail))
@@ -891,6 +987,11 @@ namespace backend_jd_api.Tests.Controllers
             var returnedJobs = Assert.IsType<List<JobDescription>>(okResult.Value);
             Assert.Equal(2, returnedJobs.Count);
             Assert.All(returnedJobs, job => Assert.Equal(userEmail, job.UserEmail));
+            // **ADDED: Assert for Analysis fields**
+            Assert.Equal("Marketing Manager", returnedJobs[0].Analysis?.role);
+            Assert.Equal("E-commerce", returnedJobs[0].Analysis?.industry);
+            Assert.Equal("UX Designer", returnedJobs[1].Analysis?.role);
+            Assert.Equal("Technology", returnedJobs[1].Analysis?.industry);
 
             _mockJobService.Verify(service => service.GetByUserEmailAsync(userEmail), Times.Once);
         }
@@ -916,5 +1017,8 @@ namespace backend_jd_api.Tests.Controllers
         }
 
         #endregion
+
     }
 }
+
+
