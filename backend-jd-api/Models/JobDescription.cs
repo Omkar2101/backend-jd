@@ -26,8 +26,9 @@ namespace backend_jd_api.Models
         public AnalysisResult? Analysis { get; set; }
     }
 
+    //added class for analysis result
     public class AnalysisResult
-    
+
     {
         public double? bias_score { get; set; }
         public double? inclusivity_score { get; set; }
@@ -42,7 +43,7 @@ namespace backend_jd_api.Models
         public List<Issue> Issues { get; set; } = new();
         public List<Suggestion> suggestions { get; set; } = new();
         public List<string> seo_keywords { get; set; } = new();
-        
+
         public string overall_assessment { get; set; } = string.Empty; // Add this field for overall assessment
     }
 
