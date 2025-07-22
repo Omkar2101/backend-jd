@@ -12,6 +12,7 @@ namespace backend_jd_api.Models
 
         public string UserEmail { get; set; } = string.Empty;  // Add this field
 
+        [BsonElement("OriginalText")] 
         public string OriginalText { get; set; } = string.Empty;
 
         [BsonElement("improved_text")] // Map to exact LLM field name
@@ -40,6 +41,11 @@ namespace backend_jd_api.Models
         [JsonPropertyName("improved_text")]
         [BsonElement("improved_text")]
         public string ImprovedText { get; set; } = string.Empty;
+
+         // Add this property to capture originalText from Python
+        [JsonPropertyName("original_text")]
+        [BsonElement("original_text")]
+        public string OriginalText { get; set; } = string.Empty;
         public List<Issue> Issues { get; set; } = new();
         public List<Suggestion> suggestions { get; set; } = new();
         public List<string> seo_keywords { get; set; } = new();

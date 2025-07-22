@@ -108,7 +108,7 @@ namespace backend_jd_api.Services
                 var jd = new JobDescription
                 {
                     UserEmail = userEmail,
-                    OriginalText = text,
+                    OriginalText = analysis.OriginalText ,
                     ImprovedText = analysis.ImprovedText ?? string.Empty,
                     // OverallAssessment = analysis.overall_assessment, // Add overall assessment
                     FileName = file.FileName,
@@ -163,17 +163,17 @@ namespace backend_jd_api.Services
                     throw new ArgumentException($"Job description text must be at least 50 characters long. Current length: {text.Trim().Length} characters");
                 }
 
-                _logger.LogInformation("Analyzing text with length: {Length} characters", text.Length);
+                // _logger.LogInformation("Analyzing text with length: {Length} characters", text.Length);
 
 
                 // Analyze text
                 var analysis = await _pythonService.AnalyzeTextAsync(text);
-                _logger.LogInformation("Text analysis completed successfully{analysis}", analysis);
+                _logger.LogInformation("Text analysis completed successfully{analysis with original text}", analysis.OriginalText);
 
                 // Create job record
                 var job = new JobDescription
                 {
-                    OriginalText = text,
+                    OriginalText = analysis.OriginalText,
                     ImprovedText = analysis.ImprovedText,
                     // OverallAssessment = analysis.overall_assessment, // Add overall assessment
                     FileName = jobTitle ?? "Direct Input",
