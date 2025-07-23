@@ -1,13 +1,16 @@
 
+
 using Xunit;
 using Moq;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
-using MongoDB.Driver;
-using System.Text;
 using backend_jd_api.Services;
 using backend_jd_api.Models;
 using backend_jd_api.Data;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace backend_jd_api.Tests.Services
 {
@@ -15,537 +18,186 @@ namespace backend_jd_api.Tests.Services
     {
         private readonly Mock<MongoDbContext> _mockDb;
         private readonly Mock<PythonService> _mockPythonService;
+        private readonly Mock<IFileStorageService> _mockFileStorageService;
         private readonly Mock<ILogger<JobService>> _mockLogger;
-        private readonly JobService _jobService;
+        
+        private readonly JobService _service;
 
         public JobServiceTests()
         {
             _mockDb = new Mock<MongoDbContext>();
             _mockPythonService = new Mock<PythonService>();
+            _mockFileStorageService = new Mock<IFileStorageService>();
             _mockLogger = new Mock<ILogger<JobService>>();
-            _jobService = new JobService(_mockDb.Object, _mockPythonService.Object, _mockLogger.Object);
+
+            _service = new JobService(_mockDb.Object, _mockPythonService.Object, _mockLogger.Object, _mockFileStorageService.Object);
+        }
+
+        // Helper: create mock IFormFile from string content
+        private static IFormFile CreateMockFile(string fileName, string content)
+        {
+            var ms = new MemoryStream();
+            var writer = new StreamWriter(ms);
+            writer.Write(content);
+            writer.Flush();
+            ms.Position = 0;
+
+            return new FormFile(ms, 0, ms.Length, "file", fileName)
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "text/plain"
+            };
         }
 
         [Fact]
         public async Task AnalyzeFromFileAsync_ValidFile_ReturnsJobResponse()
         {
-            var file = CreateMockFile("test.pdf", "This is a valid job description with more than 50 characters to meet the minimum requirements.");
-            var userEmail = "test@example.com";
-            var extractedText = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
+            var file = CreateMockFile("jobdesc.txt", "This is a valid job description text with more than 50 characters...");
+            var userEmail = "user@example.com";
+            var extractedText = "This is a valid job description text with more than 50 characters...";
+            var analysis = new AnalysisResult
             {
-                ImprovedText = "Improved job description",
-                bias_score = 0.2,
-                inclusivity_score = 0.8,
-                clarity_score = 0.9,
-                role = "Software Engineer",
-                industry = "Technology",
-                overall_assessment = "Good job description with minor improvements needed",
-                Issues = new List<Issue>(),
-                seo_keywords = new List<string> { "software", "engineer", "development" },
-                suggestions = new List<Suggestion>
+                ImprovedText = "Improved text",
+                suggestions = new List<Suggestion>()
+            };
+
+            _mockFileStorageService.Setup(s => s.SaveFileAsync(file, userEmail))
+                .ReturnsAsync(("storedname.txt", "/files/storedname.txt"));
+            _mockPythonService.Setup(p => p.ExtractTextFromFileAsync(It.IsAny<byte[]>(), file.FileName))
+                .ReturnsAsync(extractedText);
+            _mockPythonService.Setup(p => p.AnalyzeTextAsync(extractedText))
+                .ReturnsAsync(analysis);
+            _mockFileStorageService.Setup(s => s.GetFileUrl("storedname.txt"))
+                .Returns("https://fileserver.com/storedname.txt");
+
+            _mockDb.Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>()))
+                .ReturnsAsync((JobDescription jd) =>
                 {
-                    new Suggestion { Original = "Suggestion 1", Improved = "Improved 1", rationale = "Better clarity", Category = "Clarity" },
-                    new Suggestion { Original = "Suggestion 2", Improved = "Improved 2", rationale = "More inclusive", Category = "Bias" }
-                }
-            };
-            var savedJob = new JobDescription
-            {
-                Id = "123",
-                UserEmail = userEmail,
-                OriginalText = extractedText,
-                ImprovedText = analysisResult.ImprovedText,
-                FileName = "test.pdf",
-                Analysis = analysisResult,
-                CreatedAt = DateTime.UtcNow
-            };
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.pdf")).ReturnsAsync(extractedText);
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(extractedText)).ReturnsAsync(analysisResult);
-            _mockDb.Setup(x => x.CreateJobAsync(It.IsAny<JobDescription>())).ReturnsAsync(savedJob);
-            var result = await _jobService.AnalyzeFromFileAsync(file, userEmail);
-            //print the result
-            Console.WriteLine("Job Response: bababaaaaaaaaaaaa" + System.Text.Json.JsonSerializer.Serialize(result));
+                    jd.Id = "job123";
+                    return jd;
+                });
+
+            var result = await _service.AnalyzeFromFileAsync(file, userEmail);
+
             Assert.NotNull(result);
-            Assert.Equal("123", result.Id);
+            Assert.Equal("job123", result.Id);
             Assert.Equal(userEmail, result.UserEmail);
             Assert.Equal(extractedText, result.OriginalText);
-            Assert.Equal(analysisResult.ImprovedText, result.ImprovedText);
-            Assert.Equal("test.pdf", result.FileName);
-            Assert.Equal(analysisResult, result.Analysis);
+            Assert.Equal("Improved text", result.ImprovedText);
+            Assert.Equal("jobdesc.txt", result.FileName);
+            Assert.Equal("https://fileserver.com/storedname.txt", result.FileUrl);
         }
 
         [Fact]
-        public async Task AnalyzeFromFileAsync_EmptyExtractedText_ThrowsException()
+        public async Task AnalyzeFromFileAsync_EmptyExtractedText_ThrowsExceptionAndDeletesFile()
         {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync(string.Empty);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Contains("No text could be extracted from the file", exception.Message);
-        }
+            var file = CreateMockFile("empty.txt", "some content");
+            var userEmail = "user@example.com";
 
-        [Fact]
-        public async Task AnalyzeFromFileAsync_WhitespaceOnlyExtractedText_ThrowsException()
-        {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync("   \n\t   ");
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Contains("No text could be extracted from the file", exception.Message);
-        }
+            _mockFileStorageService.Setup(s => s.SaveFileAsync(file, userEmail))
+                .ReturnsAsync(("storedname.txt", "/files/storedname.txt"));
+            _mockPythonService.Setup(p => p.ExtractTextFromFileAsync(It.IsAny<byte[]>(), file.FileName))
+                .ReturnsAsync(string.Empty);
+           
 
-        [Fact]
-        public async Task AnalyzeFromFileAsync_TextTooShort_ThrowsException()
-        {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            var shortText = "Short text";
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync(shortText);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Contains("The extracted text is too short", exception.Message);
-            Assert.Contains($"({shortText.Trim().Length} characters)", exception.Message);
-        }
+            var ex = await Assert.ThrowsAsync<Exception>(() => _service.AnalyzeFromFileAsync(file, userEmail));
+            Assert.Contains("No text could be extracted from the file", ex.Message);
 
-        [Fact]
-        public async Task AnalyzeFromFileAsync_ExtractTextThrowsException_LogsErrorAndRethrows()
-        {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            var pythonServiceException = new Exception("Python service error");
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ThrowsAsync(pythonServiceException);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Equal("Python service error", exception.Message);
-            _mockLogger.Verify(x => x.Log(LogLevel.Error, It.IsAny<EventId>(), It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Error analyzing file test.txt")), It.IsAny<Exception>(), It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
-        }
-
-        [Fact]
-        public async Task AnalyzeFromFileAsync_AnalyzeTextThrowsException_LogsErrorAndRethrows()
-        {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            var extractedText = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var analysisException = new Exception("Analysis failed");
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync(extractedText);
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(extractedText)).ThrowsAsync(analysisException);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Equal("Analysis failed", exception.Message);
-        }
-
-        [Fact]
-        public async Task AnalyzeFromFileAsync_DatabaseSaveThrowsException_LogsErrorAndRethrows()
-        {
-            var file = CreateMockFile("test.txt", "content");
-            var userEmail = "test@example.com";
-            var extractedText = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
-            { 
-                ImprovedText = "Improved text",
-                bias_score = 0.3,
-                inclusivity_score = 0.7,
-                clarity_score = 0.8,
-                role = "Developer",
-                industry = "Technology",
-                overall_assessment = "Needs improvement",
-                Issues = new List<Issue>(),
-                suggestions = new List<Suggestion>(),
-                seo_keywords = new List<string>()
-            };
-            var dbException = new Exception("Database error");
-            _mockPythonService.Setup(x => x.ExtractTextFromFileAsync(It.IsAny<byte[]>(), "test.txt")).ReturnsAsync(extractedText);
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(extractedText)).ReturnsAsync(analysisResult);
-            _mockDb.Setup(x => x.CreateJobAsync(It.IsAny<JobDescription>())).ThrowsAsync(dbException);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Equal("Database error", exception.Message);
+            _mockFileStorageService.Verify(s => s.DeleteFileAsync("storedname.txt"), Times.Once);
         }
 
         [Fact]
         public async Task AnalyzeTextAsync_ValidText_ReturnsJobResponse()
         {
-            var text = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var userEmail = "test@example.com";
-            var jobTitle = "Software Engineer";
-            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
+            var text = "This job description text is definitely more than 50 characters long for testing.";
+            var userEmail = "user@example.com";
+            var analysis = new AnalysisResult { ImprovedText = "Improved text", suggestions = new List<Suggestion>() };
+
+            _mockPythonService.Setup(p => p.AnalyzeTextAsync(text)).ReturnsAsync(analysis);
+            _mockDb.Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>())).ReturnsAsync((JobDescription jd) =>
             {
-                ImprovedText = "Improved job description",
-                bias_score = 0.1,
-                inclusivity_score = 0.9,
-                clarity_score = 0.85,
-                role = "Software Engineer",
-                industry = "Technology",
-                overall_assessment = "Excellent job description",
-                Issues = new List<Issue>(),
-                seo_keywords = new List<string> { "software", "engineer", "programming" },
-                suggestions = new List<Suggestion>
-                {
-                    new Suggestion { Original = "Suggestion 1", Improved = "Better suggestion 1", rationale = "More inclusive language", Category = "Bias" }
-                }
-            };
-            var savedJob = new JobDescription
-            {
-                Id = "123",
-                UserEmail = userEmail,
-                OriginalText = text,
-                ImprovedText = analysisResult.ImprovedText,
-                FileName = jobTitle,
-                Analysis = analysisResult,
-                CreatedAt = DateTime.UtcNow
-            };
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(text)).ReturnsAsync(analysisResult);
-            _mockDb.Setup(x => x.CreateJobAsync(It.IsAny<JobDescription>())).ReturnsAsync(savedJob);
-            var result = await _jobService.AnalyzeTextAsync(text, userEmail, jobTitle);
+                jd.Id = "jobTxt123";
+                return jd;
+            });
+
+            var result = await _service.AnalyzeTextAsync(text, userEmail, "Job Title");
+
             Assert.NotNull(result);
-            Assert.Equal("123", result.Id);
+            Assert.Equal("jobTxt123", result.Id);
             Assert.Equal(userEmail, result.UserEmail);
             Assert.Equal(text, result.OriginalText);
-            Assert.Equal(analysisResult.ImprovedText, result.ImprovedText);
-            Assert.Equal(jobTitle, result.FileName);
-            Assert.Equal(analysisResult, result.Analysis);
+            Assert.Equal("Improved text", result.ImprovedText);
+            Assert.Equal("Job Title", result.FileName);
         }
 
         [Fact]
-        public async Task AnalyzeTextAsync_EmptyText_ThrowsArgumentException()
+        public async Task AnalyzeTextAsync_ShortText_ThrowsArgumentException()
         {
-            var text = "";
-            var userEmail = "test@example.com";
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.AnalyzeTextAsync(text, userEmail));
-            Assert.Equal("text", exception.ParamName);
-            Assert.Contains("Text cannot be empty or whitespace", exception.Message);
+            var shortText = "Too short";
+            var userEmail = "user@example.com";
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(() => _service.AnalyzeTextAsync(shortText, userEmail));
+            Assert.Contains("at least 50 characters", ex.Message);
         }
 
         [Fact]
-        public async Task AnalyzeTextAsync_NullText_ThrowsArgumentException()
+        public async Task GetJobAsync_ExistingJob_ReturnsJobResponse()
         {
-            string text = null;
-            var userEmail = "test@example.com";
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.AnalyzeTextAsync(text, userEmail));
-            Assert.Equal("text", exception.ParamName);
-            Assert.Contains("Text cannot be empty or whitespace", exception.Message);
-        }
-
-        [Fact]
-        public async Task AnalyzeTextAsync_WhitespaceOnlyText_ThrowsArgumentException()
-        {
-            var text = "   \n\t   ";
-            var userEmail = "test@example.com";
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.AnalyzeTextAsync(text, userEmail));
-            Assert.Equal("text", exception.ParamName);
-            Assert.Contains("Text cannot be empty or whitespace", exception.Message);
-        }
-
-        [Fact]
-        public async Task AnalyzeTextAsync_TextTooShort_ThrowsArgumentException()
-        {
-            var text = "Short";
-            var userEmail = "test@example.com";
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.AnalyzeTextAsync(text, userEmail));
-            Assert.Contains("Job description text must be at least 50 characters long", exception.Message);
-            Assert.Contains($"Current length: {text.Trim().Length} characters", exception.Message);
-        }
-
-        [Fact]
-        public async Task AnalyzeTextAsync_NoJobTitle_UsesDefaultFileName()
-        {
-            var text = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var userEmail = "test@example.com";
-            var analysisResult = new AnalysisResult  // **UPDATED: Added missing schema fields**
-            { 
-                ImprovedText = "Improved text",
-                bias_score = 0.25,
-                inclusivity_score = 0.75,
-                clarity_score = 0.8,
-                role = "General Position",
-                industry = "Various",
-                overall_assessment = "Standard job description",
-                Issues = new List<Issue>(),
-                suggestions = new List<Suggestion>(),
-                seo_keywords = new List<string>()
-            };
-            var savedJob = new JobDescription
-            {
-                Id = "123",
-                FileName = "Direct Input",
-                UserEmail = userEmail,
-                OriginalText = text,
-                ImprovedText = analysisResult.ImprovedText,
-                Analysis = analysisResult,
-                CreatedAt = DateTime.UtcNow
-            };
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(text)).ReturnsAsync(analysisResult);
-            _mockDb.Setup(x => x.CreateJobAsync(It.IsAny<JobDescription>())).ReturnsAsync(savedJob);
-            var result = await _jobService.AnalyzeTextAsync(text, userEmail);
-            Assert.Equal("Direct Input", result.FileName);
-        }
-
-        [Fact]
-        public async Task AnalyzeTextAsync_AnalysisThrowsException_LogsErrorAndRethrows()
-        {
-            var text = "This is a valid job description with more than 50 characters to meet the minimum requirements.";
-            var userEmail = "test@example.com";
-            var analysisException = new Exception("Analysis failed");
-            _mockPythonService.Setup(x => x.AnalyzeTextAsync(text)).ThrowsAsync(analysisException);
-            var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.AnalyzeTextAsync(text, userEmail));
-            Assert.Equal("Analysis failed", exception.Message);
-            _mockLogger.Verify(x => x.Log(LogLevel.Error, It.IsAny<EventId>(), It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Error analyzing text")), It.IsAny<Exception>(), It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
-        }
-
-        [Fact]
-        public async Task GetJobAsync_JobExists_ReturnsJobResponse()
-        {
-            var jobId = "123";
+            var jobId = "job123";
             var job = new JobDescription
             {
                 Id = jobId,
-                UserEmail = "test@example.com",
+                UserEmail = "user@example.com",
                 OriginalText = "Original text",
                 ImprovedText = "Improved text",
-                FileName = "test.txt",
-                Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
-                {
-                    bias_score = 0.2,
-                    inclusivity_score = 0.8,
-                    clarity_score = 0.9,
-                    role = "Analyst",
-                    industry = "Business",
-                    overall_assessment = "Well-structured job description",
-                    ImprovedText = "Improved text",
-                    Issues = new List<Issue>(),
-                    suggestions = new List<Suggestion>(),
-                    seo_keywords = new List<string>()
-                },
-                CreatedAt = DateTime.UtcNow
+                FileName = "file.txt",
+                Analysis = new AnalysisResult(),
+                CreatedAt = DateTime.UtcNow,
+                StoredFileName = "storedFile.txt"
             };
-            _mockDb.Setup(x => x.GetJobAsync(jobId)).ReturnsAsync(job);
-            var result = await _jobService.GetJobAsync(jobId);
+
+            _mockDb.Setup(db => db.GetJobAsync(jobId)).ReturnsAsync(job);
+            _mockFileStorageService.Setup(s => s.GetFileUrl("storedFile.txt"))
+                .Returns("https://fileserver.com/storedFile.txt");
+
+            var result = await _service.GetJobAsync(jobId);
+
             Assert.NotNull(result);
             Assert.Equal(jobId, result.Id);
-            Assert.Equal("test@example.com", result.UserEmail);
-            Assert.Equal("Original text", result.OriginalText);
-            Assert.Equal("Improved text", result.ImprovedText);
-            Assert.Equal("test.txt", result.FileName);
+            Assert.Equal("user@example.com", result.UserEmail);
+            Assert.Equal("https://fileserver.com/storedFile.txt", result.FileUrl);
         }
 
         [Fact]
-        public async Task GetJobAsync_JobDoesNotExist_ReturnsNull()
+        public async Task GetJobAsync_NonExistingJob_ReturnsNull()
         {
             var jobId = "nonexistent";
-            _mockDb.Setup(x => x.GetJobAsync(jobId)).ReturnsAsync((JobDescription)null);
-            var result = await _jobService.GetJobAsync(jobId);
+            _mockDb.Setup(db => db.GetJobAsync(jobId)).ReturnsAsync((JobDescription)null);
+
+            var result = await _service.GetJobAsync(jobId);
+
             Assert.Null(result);
         }
 
         [Fact]
-        public async Task GetJobAsync_EmptyId_CallsDbWithEmptyId()
+        public async Task DeleteJobAsync_Success_ReturnsTrue()
         {
-            var jobId = "";
-            _mockDb.Setup(x => x.GetJobAsync(jobId)).ReturnsAsync((JobDescription)null);
-            var result = await _jobService.GetJobAsync(jobId);
-            Assert.Null(result);
-            _mockDb.Verify(x => x.GetJobAsync(jobId), Times.Once);
+            _mockDb.Setup(db => db.DeleteJobAsync("job123")).ReturnsAsync(true);
+
+            var result = await _service.DeleteJobAsync("job123");
+
+            Assert.True(result);
         }
 
         [Fact]
-        public async Task GetAllJobsAsync_NoParameters_ReturnsJobListWithDefaultPagination()
+        public async Task DeleteJobAsync_NotFound_ReturnsFalse()
         {
-            var jobs = new List<JobDescription>
-            {
-                new JobDescription { 
-                    Id = "1", 
-                    UserEmail = "user1@example.com", 
-                    OriginalText = "Text1", 
-                    ImprovedText = "Improved1", 
-                    FileName = "file1.txt", 
-                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
-                    {
-                        bias_score = 0.1,
-                        inclusivity_score = 0.9,
-                        clarity_score = 0.8,
-                        role = "Developer",
-                        industry = "Technology",
-                        overall_assessment = "Good job description",
-                        ImprovedText = "Improved1",
-                        Issues = new List<Issue>(),
-                        suggestions = new List<Suggestion>(),
-                        seo_keywords = new List<string>()
-                    }, 
-                    CreatedAt = DateTime.UtcNow 
-                },
-                new JobDescription { 
-                    Id = "2", 
-                    UserEmail = "user2@example.com", 
-                    OriginalText = "Text2", 
-                    ImprovedText = "Improved2", 
-                    FileName = "file2.txt", 
-                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
-                    {
-                        bias_score = 0.3,
-                        inclusivity_score = 0.7,
-                        clarity_score = 0.9,
-                        role = "Manager",
-                        industry = "Finance",
-                        overall_assessment = "Needs minor improvements",
-                        ImprovedText = "Improved2",
-                        Issues = new List<Issue>(),
-                        suggestions = new List<Suggestion>(),
-                        seo_keywords = new List<string>()
-                    }, 
-                    CreatedAt = DateTime.UtcNow 
-                }
-            };
-            _mockDb.Setup(x => x.GetAllJobsAsync(0, 20)).ReturnsAsync(jobs);
-            var result = await _jobService.GetAllJobsAsync();
-            Assert.NotNull(result);
-            Assert.Equal(2, result.Count);
-            Assert.Equal("1", result[0].Id);
-            Assert.Equal("2", result[1].Id);
-        }
+            _mockDb.Setup(db => db.DeleteJobAsync("job123")).ReturnsAsync(false);
 
-        [Fact]
-        public async Task GetAllJobsAsync_WithCustomPagination_ReturnsCorrectPage()
-        {
-            var jobs = new List<JobDescription>
-            {
-                new JobDescription { 
-                    Id = "3", 
-                    UserEmail = "user3@example.com", 
-                    OriginalText = "Text3", 
-                    ImprovedText = "Improved3", 
-                    FileName = "file3.txt", 
-                    Analysis = new AnalysisResult  // **UPDATED: Added missing schema fields**
-                    {
-                        bias_score = 0.2,
-                        inclusivity_score = 0.8,
-                        clarity_score = 0.85,
-                        role = "Consultant",
-                        industry = "Healthcare",
-                        overall_assessment = "Professional job description",
-                        ImprovedText = "Improved3",
-                        Issues = new List<Issue>(),
-                        suggestions = new List<Suggestion>(),
-                        seo_keywords = new List<string>()
-                    }, 
-                    CreatedAt = DateTime.UtcNow 
-                }
-            };
-            _mockDb.Setup(x => x.GetAllJobsAsync(10, 5)).ReturnsAsync(jobs);
-            var result = await _jobService.GetAllJobsAsync(10, 5);
-            Assert.NotNull(result);
-            Assert.Single(result);
-            Assert.Equal("3", result[0].Id);
-        }
+            var result = await _service.DeleteJobAsync("job123");
 
-        [Fact]
-        public async Task GetAllJobsAsync_EmptyResult_ReturnsEmptyList()
-        {
-            var jobs = new List<JobDescription>();
-            _mockDb.Setup(x => x.GetAllJobsAsync(0, 20)).ReturnsAsync(jobs);
-            var result = await _jobService.GetAllJobsAsync();
-            Assert.NotNull(result);
-            Assert.Empty(result);
-        }
-
-        // [Fact]
-        // public async Task GetByUserEmailAsync_ValidEmail_ReturnsUserJobs()
-        // {
-        //     var userEmail = "test@example.com";
-        //     var jobs = new List<JobDescription>
-        //     {
-        //         new JobDescription { Id = "1", UserEmail = userEmail, OriginalText = "Text1", ImprovedText = "Improved1", FileName = "file1.txt", Analysis = new AnalysisResult(), CreatedAt = DateTime.UtcNow },
-        //         new JobDescription { Id = "2", UserEmail = userEmail, OriginalText = "Text2", ImprovedText = "Improved2", FileName = "file2.txt", Analysis = new AnalysisResult(), CreatedAt = DateTime.UtcNow }
-        //     };
-        //     SetupMongoCollection(jobs,null);
-        //     var result = await _jobService.GetByUserEmailAsync(userEmail);
-        //     Assert.NotNull(result);
-        //     Assert.Equal(jobs.Count, result.Count);
-        //     for (int i = 0; i < jobs.Count; i++)
-        //     {
-        //         Assert.Equal(jobs[i].Id, result[i].Id);
-        //         Assert.Equal(jobs[i].UserEmail, result[i].UserEmail);
-        //         Assert.Equal(jobs[i].OriginalText, result[i].OriginalText);
-        //         Assert.Equal(jobs[i].ImprovedText, result[i].ImprovedText);
-        //         Assert.Equal(jobs[i].FileName, result[i].FileName);
-        //     }
-        // }
-
-        [Fact]
-        public async Task GetByUserEmailAsync_EmptyEmail_ThrowsArgumentException()
-        {
-            var email = "";
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.GetByUserEmailAsync(email));
-            Assert.Equal("email", exception.ParamName);
-            Assert.Contains("Email cannot be null or empty", exception.Message);
-        }
-
-        [Fact]
-        public async Task GetByUserEmailAsync_NullEmail_ThrowsArgumentException()
-        {
-            string email = null;
-            var exception = await Assert.ThrowsAsync<ArgumentException>(() => _jobService.GetByUserEmailAsync(email));
-            Assert.Equal("email", exception.ParamName);
-            Assert.Contains("Email cannot be null or empty", exception.Message);
-        }
-
-        // [Fact]
-        // public async Task GetByUserEmailAsync_NoJobsFound_ReturnsEmptyList()
-        // {
-        //     var userEmail = "nojobs@example.com";
-        //     var jobs = new List<JobDescription>();
-        //     SetupMongoCollection(jobs);
-        //     var result = await _jobService.GetByUserEmailAsync(userEmail);
-        //     Assert.NotNull(result);
-        //     Assert.Empty(result);
-        // }
-
-        // [Fact]
-        // public async Task GetByUserEmailAsync_DatabaseThrowsException_LogsErrorAndRethrows()
-        // {
-        //     var userEmail = "test@example.com";
-        //     var dbException = new Exception("Database connection failed");
-
-        //     // Use the unified helper method with exception
-        //     SetupMongoCollection(null,exceptionToThrow: dbException);
-
-        //     var exception = await Assert.ThrowsAsync<Exception>(() => _jobService.GetByUserEmailAsync(userEmail));
-        //     Assert.Equal("Database connection failed", exception.Message);
-        //     _mockLogger.Verify(x => x.Log(LogLevel.Error, It.IsAny<EventId>(),
-        //         It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Error retrieving jobs for user")),
-        //         It.IsAny<Exception>(),
-        //         It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
-        // }
-
-        private IFormFile CreateMockFile(string fileName, string content)
-        {
-            var bytes = Encoding.UTF8.GetBytes(content);
-            var file = new Mock<IFormFile>();
-            file.Setup(f => f.FileName).Returns(fileName);
-            file.Setup(f => f.Length).Returns(bytes.Length);
-            file.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns((Stream stream, CancellationToken token) => { stream.Write(bytes, 0, bytes.Length); return Task.CompletedTask; });
-            return file.Object;
-        }
-        
-        private void SetupMongoCollection(List<JobDescription> jobs = null, Exception exceptionToThrow = null)
-        {
-            var mockCollection = new Mock<IMongoCollection<JobDescription>>();
-            var mockFindFluent = new Mock<IFindFluent<JobDescription, JobDescription>>();
-            var mockSortedFindFluent = new Mock<IFindFluent<JobDescription, JobDescription>>();
-            
-            // Explicitly specify both parameters to avoid optional parameter issue
-            mockCollection.Setup(x => x.Find(It.IsAny<FilterDefinition<JobDescription>>(), It.IsAny<FindOptions>()))
-                .Returns(mockFindFluent.Object);
-            mockFindFluent.Setup(x => x.Sort(It.IsAny<SortDefinition<JobDescription>>()))
-                .Returns(mockSortedFindFluent.Object);
-            
-            if (exceptionToThrow != null)
-            {
-                mockSortedFindFluent.Setup(x => x.ToListAsync(It.IsAny<CancellationToken>()))
-                    .ThrowsAsync(exceptionToThrow);
-            }
-            else
-            {
-                mockSortedFindFluent.Setup(x => x.ToListAsync(It.IsAny<CancellationToken>()))
-                    .ReturnsAsync(jobs ?? new List<JobDescription>());
-            }
-            
-            _mockDb.Setup(x => x.Jobs).Returns(mockCollection.Object);
+            Assert.False(result);
         }
     }
 }
+

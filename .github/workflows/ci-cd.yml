@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, role-industry]
+    branches: [ main, fileview,role-industry]
   pull_request:
     branches: [ main ]
 

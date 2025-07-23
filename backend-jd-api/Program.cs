@@ -17,7 +17,8 @@ builder.Services.AddSingleton(appSettings);
 // Register services
 builder.Services.AddSingleton<MongoDbContext>();
 builder.Services.AddHttpClient<PythonService>();
-builder.Services.AddScoped<IJobService,JobService>();
+builder.Services.AddScoped<IJobService, JobService>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 
 // Add CORS for frontend
 builder.Services.AddCors(options =>
@@ -55,6 +56,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 
