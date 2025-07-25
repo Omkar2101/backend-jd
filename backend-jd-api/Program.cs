@@ -17,7 +17,8 @@ builder.Services.AddSingleton(appSettings);
 // Register services
 builder.Services.AddSingleton<MongoDbContext>();
 builder.Services.AddHttpClient<PythonService>();
-builder.Services.AddScoped<IJobService,JobService>();
+builder.Services.AddScoped<IJobService, JobService>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 
 // Add CORS for frontend
 builder.Services.AddCors(options =>
@@ -37,12 +38,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Seed Data
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<MongoDbContext>();
-    await DummyDataSeeder.SeedDummyDataAsync(dbContext.Database);
-}
 
 // Configure pipeline
 if (app.Environment.IsDevelopment())
@@ -55,6 +50,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 

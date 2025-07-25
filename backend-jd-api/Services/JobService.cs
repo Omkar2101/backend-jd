@@ -23,6 +23,8 @@ namespace backend_jd_api.Services
     {
         private readonly MongoDbContext _db;
         private readonly PythonService _pythonService;
+
+        private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<JobService> _logger;
 
         /// <summary>
@@ -31,10 +33,11 @@ namespace backend_jd_api.Services
         /// <param name="db">MongoDB context for data persistence</param>
         /// <param name="pythonService">Service for text analysis and extraction</param>
         /// <param name="logger">Logger for error tracking and monitoring</param>
-        public JobService(MongoDbContext db, PythonService pythonService, ILogger<JobService> logger)
+        public JobService(MongoDbContext db, PythonService pythonService, ILogger<JobService> logger,IFileStorageService fileStorageService)
         {
             _db = db;
             _pythonService = pythonService;
+            _fileStorageService = fileStorageService;
             _logger = logger;
         }
 
@@ -69,7 +72,9 @@ namespace backend_jd_api.Services
         public async Task<JobResponse> AnalyzeFromFileAsync(IFormFile file, string userEmail)
         {
             try
-            {
+            {   
+                // Save the file first
+                var (storedFileName, filePath) = await _fileStorageService.SaveFileAsync(file, userEmail);
                 // Read file
                 using var stream = new MemoryStream();
                 await file.CopyToAsync(stream);
@@ -79,14 +84,19 @@ namespace backend_jd_api.Services
                 var text = await _pythonService.ExtractTextFromFileAsync(fileContent, file.FileName);
                 // Validate extracted text
                 if (string.IsNullOrWhiteSpace(text))
+
                 {
+                    // Clean up saved file if text extraction fails
+                    await _fileStorageService.DeleteFileAsync(storedFileName);
                     _logger.LogWarning("No text extracted from file {FileName}", file.FileName);
+                    
                     throw new Exception($"No text could be extracted from the file {file.FileName}");
                 }
 
                 // Check minimum length requirement (Python API requires 50+ characters)
                 if (text.Trim().Length < 50)
                 {
+                    await _fileStorageService.DeleteFileAsync(storedFileName);
                     _logger.LogWarning("Extracted text from {FileName} is too short: {Length} characters",
                         file.FileName, text.Trim().Length);
                     throw new Exception($"The extracted text is too short ({text.Trim().Length} characters). Job descriptions must be at least 50 characters long.");
@@ -112,6 +122,14 @@ namespace backend_jd_api.Services
                     ImprovedText = analysis.ImprovedText ?? string.Empty,
                     // OverallAssessment = analysis.overall_assessment, // Add overall assessment
                     FileName = file.FileName,
+
+                    //added file properties
+                    OriginalFileName = file.FileName,
+                    StoredFileName = storedFileName,
+                    ContentType = file.ContentType,
+                    FileSize = file.Length,
+                    FilePath = filePath,
+
                     CreatedAt = DateTime.UtcNow,
                     Analysis = analysis
                 };
@@ -125,6 +143,12 @@ namespace backend_jd_api.Services
                     OriginalText = savedJob.OriginalText,
                     ImprovedText = savedJob.ImprovedText,
                     // OverallAssessment = savedJob.OverallAssessment, // Add this line
+
+                    //aded file properties
+                    OriginalFileName = savedJob.OriginalFileName,
+                    ContentType = savedJob.ContentType,
+                    FileSize = savedJob.FileSize,
+                    FileUrl = _fileStorageService.GetFileUrl(savedJob.StoredFileName!),
                     FileName = savedJob.FileName,
                     CreatedAt = savedJob.CreatedAt,
                     Analysis = savedJob.Analysis
@@ -253,7 +277,9 @@ namespace backend_jd_api.Services
         /// </summary>
         /// <param name="job">The job description entity to map</param>
         /// <returns>A JobResponse object suitable for API responses</returns>
-        private static JobResponse MapToResponse(JobDescription job)
+        /// 
+        /// //removed static keyword
+        private  JobResponse MapToResponse(JobDescription job)
         {
             return new JobResponse
             {
@@ -264,7 +290,11 @@ namespace backend_jd_api.Services
                 UserEmail = job.UserEmail,  // Add this line
                 Analysis = job.Analysis,
                 CreatedAt = job.CreatedAt,
-                FileName = job.FileName
+                FileName = job.FileName,
+                OriginalFileName = job.OriginalFileName,
+                ContentType = job.ContentType,
+                FileSize = job.FileSize,
+                FileUrl = !string.IsNullOrEmpty(job.StoredFileName) ? _fileStorageService.GetFileUrl(job.StoredFileName) : null
             };
         }
     }

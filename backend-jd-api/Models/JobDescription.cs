@@ -24,6 +24,13 @@ namespace backend_jd_api.Models
 
         // Analysis Results
         public AnalysisResult? Analysis { get; set; }
+
+        // New file storage properties
+        public string? OriginalFileName { get; set; }
+        public string? StoredFileName { get; set; }
+        public string? ContentType { get; set; }
+        public long FileSize { get; set; }
+        public string? FilePath { get; set; }
     }
 
     //added class for analysis result
@@ -40,6 +47,11 @@ namespace backend_jd_api.Models
         [JsonPropertyName("improved_text")]
         [BsonElement("improved_text")]
         public string ImprovedText { get; set; } = string.Empty;
+
+        // Add this property to handle the original_text field
+        [JsonPropertyName("original_text")]
+        [BsonElement("original_text")]
+        public string OriginalText { get; set; } = string.Empty;
         public List<Issue> Issues { get; set; } = new();
         public List<Suggestion> suggestions { get; set; } = new();
         public List<string> seo_keywords { get; set; } = new();
@@ -57,10 +69,7 @@ namespace backend_jd_api.Models
 
     public class Suggestion
     {
-        // public string Original { get; set; } = string.Empty;
-        // public string Improved { get; set; } = string.Empty;
-        // public string rationale { get; set; } = string.Empty;
-        // public string Category { get; set; } = string.Empty; // Bias, Clarity, SEO
+        
             [JsonPropertyName("original")]
             public string Original { get; set; } = string.Empty;
 

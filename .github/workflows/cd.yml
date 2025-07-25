@@ -1,0 +1,80 @@
+# Continuous Deployment Pipeline
+# This workflow builds and publishes Docker images after successful CI tests
+# Only runs when CI tests pass on main branch or PR merges
+
+name: CD - Build and Deploy
+
+# Trigger this workflow when:
+on:
+  workflow_run:
+    workflows: ["CI - Build and Test"]  # Wait for CI to complete
+    types: [completed]
+    branches: [ main, fileview, role-industry ]
+
+# Environment variables used across all jobs
+env:
+  REGISTRY: ghcr.io  # GitHub Container Registry
+  IMAGE_NAME: ${{ github.repository }}  # Uses repo name as image name
+
+jobs:
+  # Job to build and push Docker image to registry
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    
+    # Only run if the CI workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    # Required permissions for publishing to GitHub Container Registry
+    permissions:
+      contents: read      # Read repository contents
+      packages: write     # Write to GitHub Packages/Container Registry
+    
+    steps:
+    # Step 1: Get the source code and Dockerfile
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Step 2: Login to GitHub Container Registry
+    - name: Login to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}  # GitHub username
+        password: ${{ secrets.GITHUB_TOKEN }}  # Auto-generated token
+
+    # Step 3: Generate image tags and labels based on git ref
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          # Tag with branch name for branch pushes
+          type=ref,event=branch
+          # Tag with PR number for pull requests  
+          type=ref,event=pr
+          # Tag as 'latest' only for main branch
+          type=raw,value=latest,enable={{is_default_branch}}
+          # Add timestamp for uniqueness
+          type=raw,value={{date 'YYYYMMDD-HHmmss'}}
+
+    # Step 4: Setup advanced Docker builder with caching
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # Step 5: Build Docker image and push to registry
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .  # Build context is current directory
+        file: ./Dockerfile  # Path to Dockerfile
+        platforms: linux/amd64,linux/arm64  # Build for multiple architectures
+        push: true  # Push image to registry
+        tags: ${{ steps.meta.outputs.tags }}  # Use generated tags
+        labels: ${{ steps.meta.outputs.labels }}  # Add metadata labels
+        # Use GitHub Actions cache to speed up builds
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+   

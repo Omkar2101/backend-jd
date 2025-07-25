@@ -36,5 +36,13 @@ namespace backend_jd_api.Models
         public AnalysisResult? Analysis { get; set; }
         public DateTime CreatedAt { get; set; }
         public string FileName { get; set; } = string.Empty;
+
+        // New file storage properties
+        // New file properties
+        public string? OriginalFileName { get; set; }
+        public string? ContentType { get; set; }
+        public long FileSize { get; set; }
+        public string? FileUrl { get; set; } // URL to access the file
+        
     }
 }
