@@ -38,12 +38,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Seed Data
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<MongoDbContext>();
-    await DummyDataSeeder.SeedDummyDataAsync(dbContext.Database);
-}
 
 // Configure pipeline
 if (app.Environment.IsDevelopment())

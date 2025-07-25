@@ -119,6 +119,7 @@ namespace backend_jd_api.Controllers
                 // bool isImage = imageTypes.Contains(fileExtension);
 
                 var response = await _jobService.AnalyzeFromFileAsync(request.File, request.UserEmail);
+                
                 return Ok(response);
             }
             catch (Exception ex)
