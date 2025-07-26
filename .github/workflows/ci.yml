@@ -7,7 +7,7 @@ name: CI - Build and Test
 # Trigger this workflow on:
 on:
   push:
-    branches: [ main, fileview, role-industry ]  # Run on pushes to these branches
+    branches: [ main, fileview, role-industry,error ]  # Run on pushes to these branches
   pull_request:
     branches: [ main ]  # Run on PRs targeting main branch
 
