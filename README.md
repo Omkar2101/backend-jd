@@ -84,56 +84,62 @@ The API exposes the following endpoints under the route `/api/jobs`:
 - `DELETE /api/jobs/{id}`  
   Delete a specific job analysis by its ID.
 
+### Validation and Error Handling
+
+The API includes enhanced validation rules for job description text, such as minimum length, repetitive characters, special character ratio, and presence of job-related keywords. Detailed error responses are provided for validation failures, service unavailability, timeouts, and unexpected errors.
+
+## API Endpoints (FileController)
+
+The API exposes the following endpoints under the route `/api/files`:
+
+- `GET /api/files/{storedFileName}`  
+  Download a file by its stored filename.
+
+- `GET /api/files/{storedFileName}/view`  
+  View a file inline in the browser (useful for images and PDFs).
+
 ## Project Structure
 
 ```
 backend-jd/
 ├── backend-jd-api/
-│   ├── .gitignore
-│   ├── appsettings.json
-│   ├── backend-jd-api.csproj
-│   ├── backend-jd-api.http
-│   ├── backend-jd-api.sln
-│   ├── Program.cs
-│   ├── WeatherForecast.cs
-│   ├── bin/
-│   ├── Config/
-│   │   └── AppSettings.cs
 │   ├── Controllers/
-│   │   └── JobController.cs
-│   ├── Data/
-│   │   ├── DummyDataSeeder.cs
-│   │   └── MongoDbContext.cs
+│   │   ├── JobController.cs          # Handles job description analysis endpoints
+│   │   ├── FileController.cs         # Handles file download and viewing endpoints
+│   ├── Services/
+│   │   ├── JobService.cs             # Business logic for job analysis and storage
+│   │   ├── PythonService.cs          # Integration with external Python API for analysis
+│   │   ├── IFileStorageService.cs   # Interface for file storage operations
+│   │   ├── FileStorageService.cs    # Implementation of file storage (if applicable)
 │   ├── Models/
-│   │   ├── JobDescription.cs
-│   │   └── RequestModels.cs
-│   ├── obj/
+│   │   ├── JobDescription.cs         # Data model for job descriptions
+│   ├── Data/
+│   │   ├── MongoDbContext.cs         # MongoDB context and data access
 │   ├── Performance/
-│   │   └── load.js
-│   ├── Properties/
-│   │   └── launchSettings.json
-│   └── Services/
-│       ├── JobService.cs
-│       └── PythonService.cs
+│   │   ├── load.js                   # Performance testing script
+│   ├── uploads/                      # Directory for uploaded files
+│   ├── Program.cs                   # Application entry point
+│   ├── appsettings.json             # Configuration file
+│   └── backend-jd-api.csproj        # Project file
 ├── backend-jd-api.Tests/
-│   ├── .gitignore
-│   ├── backend-jd-api.Tests.csproj
-│   ├── bin/
 │   ├── Controllers/
-│   │   └── JobControllerTests.cs
-│   ├── obj/
-│   └── Services/
-│       ├── JobServiceTests.cs
-│       └── PythonServiceTests.cs
-├── Dockerfile
-├── docker-compose.yml
-├── .env
-└── .dockerignore
+│   │   ├── JobControllerTests.cs    # Unit tests for JobController
+│   │   ├── FileControllerTests.cs   # Unit tests for FileController
+│   ├── Services/
+│   │   ├── JobServiceTests.cs       # Unit tests for JobService
+│   │   ├── PythonServiceTests.cs    # Unit tests for PythonService
+│   │   ├── FileStorageServiceTests.cs # Unit tests for FileStorageService
+│   └── backend-jd-api.Tests.csproj  # Test project file
 ```
+
+## File Upload Restrictions
+
+- Supported file types for upload: `.txt`, `.doc`, `.docx`, `.pdf`, `.jpg`, `.jpeg`, `.png`.
+- Maximum file size: 10MB.
 
 ## Running Tests
 
-Unit and integration tests are located in the `backend-jd-api.Tests` project.
+Unit and integration tests are located in the `backend-jd-api.Tests` project. Tests cover controllers and services, including validation, error handling, and integration with the external Python API.
 
 To run tests locally:
 
@@ -145,5 +151,3 @@ dotnet test
 ## Contributing
 
 Contributions are welcome! Please open issues or submit pull requests for improvements or bug fixes.
-
-
