@@ -7,7 +7,7 @@ name: CI - Build and Test
 # Trigger this workflow on:
 on:
   push:
-    branches: [ main, fileview, role-industry ]  # Run on pushes to these branches
+    branches: [ main, fileview, role-industry, error ]  # Run on pushes to these branches
   pull_request:
     branches: [ main ]  # Run on PRs targeting main branch
 
@@ -16,65 +16,79 @@ jobs:
   test:
     name: Run Tests and Coverage
     runs-on: ubuntu-latest
-    
-    steps:
-    # Step 1: Get the source code
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    # Step 2: Setup .NET environment
-    - name: Setup .NET 8
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
-    
-    # Step 3: Restore NuGet packages for main project
-    - name: Restore main project dependencies
-      run: dotnet restore backend-jd-api/backend-jd-api.csproj
-      
-    # Step 4: Restore NuGet packages for test project  
-    - name: Restore test project dependencies
-      run: dotnet restore backend-jd-api.Tests/backend-jd-api.Tests.csproj
-      
-    # Step 5: Build the main application
-    - name: Build main project
-      run: dotnet build backend-jd-api/backend-jd-api.csproj --no-restore --configuration Release
-      
-    # Step 6: Build the test project
-    - name: Build test project  
-      run: dotnet build backend-jd-api.Tests/backend-jd-api.Tests.csproj --no-restore --configuration Release
-      
-    # Step 7: Execute all unit tests with coverage collection
-    - name: Run unit tests
-      run: |
-        dotnet test backend-jd-api.Tests/backend-jd-api.Tests.csproj \
-          --no-build \
-          --configuration Release \
-          --verbosity normal \
-          --collect:"XPlat Code Coverage" \
-          --logger trx \
-          --results-directory TestResults
-      
-    # Step 8: Upload test results and coverage reports as artifacts
-    # This runs even if tests fail so we can see the results
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()  # Upload results even if tests fail
-      with:
-        name: test-results-${{ github.run_id }}
-        path: |
-          TestResults/**/*.trx
-          TestResults/**/*.xml  
-          TestResults/**/coverage.cobertura.xml
-        retention-days: 30  # Keep artifacts for 30 days
 
-    # Step 9: Create a simple test summary
-    - name: Test Summary
-      if: always()
-      run: |
-        echo "## Test Results " >> $GITHUB_STEP_SUMMARY
-        if [ $? -eq 0 ]; then
-          echo " All tests passed successfully!" >> $GITHUB_STEP_SUMMARY
-        else
-          echo " Some tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
-        fi
+    steps:
+      # Step 1: Get the source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Setup .NET environment
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Step 3: Restore NuGet packages for main project
+      - name: Restore main project dependencies
+        run: dotnet restore backend-jd-api/backend-jd-api.csproj
+
+      # Step 4: Restore NuGet packages for test project  
+      - name: Restore test project dependencies
+        run: dotnet restore backend-jd-api.Tests/backend-jd-api.Tests.csproj
+
+      # Step 5: Build the main application
+      - name: Build main project
+        run: dotnet build backend-jd-api/backend-jd-api.csproj --no-restore --configuration Release
+
+      # Step 6: Build the test project  
+      - name: Build test project
+        run: dotnet build backend-jd-api.Tests/backend-jd-api.Tests.csproj --no-restore --configuration Release
+
+      # Step 7: Execute all unit tests with coverage collection
+      - name: Run unit tests
+        run: |
+          dotnet test backend-jd-api.Tests/backend-jd-api.Tests.csproj \
+            --no-build \
+            --configuration Release \
+            --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --logger trx \
+            --results-directory TestResults
+
+      # Install ReportGenerator as a tool
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      # Convert cobertura XML to human-readable summary
+      - name: Generate Coverage Report Summary
+        run: |
+          reportgenerator \
+            -reports:TestResults/**/coverage.cobertura.xml \
+            -targetdir:CoverageReport \
+            -reporttypes:TextSummary
+          echo "📊 Coverage Summary:"
+          cat CoverageReport/Summary.txt
+
+      # Step 8: Upload test results and coverage reports as artifacts
+      # This runs even if tests fail so we can see the results
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload results even if tests fail
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/*.xml  
+            TestResults/**/coverage.cobertura.xml
+          retention-days: 30  # Keep artifacts for 30 days
+
+      # Step 9: Create a simple test summary
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Results " >> $GITHUB_STEP_SUMMARY
+          if [ $? -eq 0 ]; then
+            echo " All tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo " Some tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi

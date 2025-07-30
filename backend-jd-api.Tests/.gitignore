@@ -78,3 +78,4 @@ appsettings.Local.json
 .LSOverride
 
 /Coverage
+/coverage-report
