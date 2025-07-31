@@ -37,6 +37,61 @@ This project includes a Dockerfile and a docker-compose.yml for easy containeriz
    ```
 3. The API will be accessible at `http://localhost:5268`.
 
+4. ensure that the appsettings.json will look like this for running the project locally using `dotnet run` command
+```
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "backend_jd_api.Services": "Debug"
+    }
+  },
+  "AllowedHosts": "*",
+  "Database": {
+    "ConnectionString": "mongodb://localhost:27017",
+    "DatabaseName": "JobAnalyzerDB",
+    "CollectionName": "JobDescriptions"
+  },
+  "PythonApi": {
+    "BaseUrl": "http://localhost:8000",
+    "TimeoutSeconds": 300
+  },
+  "Files": {
+    "MaxSizeMB": 10,
+    "AllowedTypes": [".txt", ".pdf", ".doc", ".docx", ".png", ".jpg"]
+  }
+}
+```
+
+5. If you are using the docker and running the setup using the network make sure the file has correct variables like below
+```
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "backend_jd_api.Services": "Debug"
+    }
+  },
+  "AllowedHosts": "*",
+  "Database": {
+    "ConnectionString": "mongodb://mongodb:27017",
+    "DatabaseName": "JobAnalyzerDB",
+    "CollectionName": "JobDescriptions"
+  },
+  "PythonApi": {
+    "BaseUrl": "http://python-llm:8000",
+    "TimeoutSeconds": 300
+  },
+  "Files": {
+    "MaxSizeMB": 10,
+    "AllowedTypes": [".txt", ".pdf", ".doc", ".docx", ".png", ".jpg"]
+  }
+}
+```
+
+
 ### Running Tests with Docker
 
 To run tests inside a Docker container, you can create a test service or run the tests manually inside the container by executing:
