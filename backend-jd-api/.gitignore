@@ -78,3 +78,5 @@ appsettings.Local.json
 .LSOverride
 
 /uploads
+
+.env
