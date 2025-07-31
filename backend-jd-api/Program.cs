@@ -106,10 +106,13 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:3000",     // React default
                 "http://localhost:5173",     // Vite default
-                "http://localhost:4200"      // Angular default
+                "http://localhost:4200",     // Angular default
+                "http://127.0.0.1:5173",     // Vite alternative
+                "http://127.0.0.1:3000"      // React alternative
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
+            .AllowCredentials()
             .WithExposedHeaders("Content-Disposition");  // For file downloads
     });
 });

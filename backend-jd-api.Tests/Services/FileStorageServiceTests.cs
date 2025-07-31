@@ -1,10 +1,14 @@
 // Tests/Services/FileStorageServiceTests.cs
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using System.Text;
+using backend_jd_api.Services;
 
 namespace backend_jd_api.Tests.Services
 {
@@ -39,14 +43,16 @@ namespace backend_jd_api.Tests.Services
             var mockFile = CreateMockFile(fileName, fileContent);
 
             // Act
-            var (storedFileName, filePath) = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            var result = await _service.SaveFileAsync(mockFile.Object, userEmail);
 
             // Assert
-            Assert.NotEmpty(storedFileName);
-            Assert.True(storedFileName.EndsWith(".txt"));
-            Assert.True(File.Exists(filePath));
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.ErrorMessage);
+            Assert.NotEmpty(result.StoredFileName);
+            Assert.True(result.StoredFileName.EndsWith(".txt"));
+            Assert.True(File.Exists(result.FilePath));
             
-            var savedContent = await File.ReadAllTextAsync(filePath);
+            var savedContent = await File.ReadAllTextAsync(result.FilePath);
             Assert.Equal(fileContent, savedContent);
         }
 
@@ -58,11 +64,72 @@ namespace backend_jd_api.Tests.Services
             var mockFile = CreateMockFile("test.txt", "content");
 
             // Act
-            await _service.SaveFileAsync(mockFile.Object, userEmail);
+            var result = await _service.SaveFileAsync(mockFile.Object, userEmail);
 
             // Assert
+            Assert.True(result.IsSuccess);
             var expectedUserDir = Path.Combine(_tempDirectory, "uploads", "newuser_example_com");
             Assert.True(Directory.Exists(expectedUserDir));
+        }
+
+        [Fact]
+        public async Task SaveFileAsync_WithNullFile_ReturnsFailure()
+        {
+            // Arrange
+            var userEmail = "test@example.com";
+
+            // Act
+            var result = await _service.SaveFileAsync(null, userEmail);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("File cannot be null", result.ErrorMessage);
+            Assert.Empty(result.StoredFileName);
+            Assert.Empty(result.FilePath);
+        }
+
+        [Fact]
+        public async Task SaveFileAsync_WithEmptyFile_ReturnsFailure()
+        {
+            // Arrange
+            var userEmail = "test@example.com";
+            var mockFile = CreateMockFile("empty.txt", "");
+
+            // Act
+            var result = await _service.SaveFileAsync(mockFile.Object, userEmail);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("File cannot be empty", result.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task SaveFileAsync_WithNullUserEmail_ReturnsFailure()
+        {
+            // Arrange
+            var mockFile = CreateMockFile("test.txt", "content");
+
+            // Act
+            var result = await _service.SaveFileAsync(mockFile.Object, null);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("User email is required", result.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task SaveFileAsync_WithFileWithoutExtension_ReturnsFailure()
+        {
+            // Arrange
+            var userEmail = "test@example.com";
+            var mockFile = CreateMockFile("filenoext", "content");
+
+            // Act
+            var result = await _service.SaveFileAsync(mockFile.Object, userEmail);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("File must have a valid extension", result.ErrorMessage);
         }
 
         [Fact]
@@ -73,27 +140,46 @@ namespace backend_jd_api.Tests.Services
             var fileContent = "Test file content";
             var mockFile = CreateMockFile("document.pdf", fileContent);
             
-            var (storedFileName, _) = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            var saveResult = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            Assert.True(saveResult.IsSuccess);
 
             // Act
-            var (fileData, contentType, fileName) = await _service.GetFileAsync(storedFileName);
+            var getResult = await _service.GetFileAsync(saveResult.StoredFileName);
 
             // Assert
-            Assert.Equal(Encoding.UTF8.GetBytes(fileContent), fileData);
-            Assert.Equal("application/pdf", contentType);
-            Assert.Equal(storedFileName, fileName);
+            Assert.True(getResult.IsSuccess);
+            Assert.Empty(getResult.ErrorMessage);
+            Assert.Equal(Encoding.UTF8.GetBytes(fileContent), getResult.FileData);
+            Assert.Equal("application/pdf", getResult.ContentType);
+            Assert.Equal(saveResult.StoredFileName, getResult.FileName);
         }
 
         [Fact]
-        public async Task GetFileAsync_WithNonExistentFile_ThrowsFileNotFoundException()
+        public async Task GetFileAsync_WithNonExistentFile_ReturnsFailure()
         {
             // Arrange
             var nonExistentFileName = "non-existent-file.pdf";
 
-            // Act & Assert
-            await Assert.ThrowsAsync<FileNotFoundException>(
-                () => _service.GetFileAsync(nonExistentFileName)
-            );
+            // Act
+            var result = await _service.GetFileAsync(nonExistentFileName);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Contains("not found", result.ErrorMessage);
+            Assert.Empty(result.FileData);
+            Assert.Empty(result.ContentType);
+            Assert.Empty(result.FileName);
+        }
+
+        [Fact]
+        public async Task GetFileAsync_WithNullFileName_ReturnsFailure()
+        {
+            // Act
+            var result = await _service.GetFileAsync(null);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("Stored filename is required", result.ErrorMessage);
         }
 
         [Fact]
@@ -102,21 +188,23 @@ namespace backend_jd_api.Tests.Services
             // Arrange
             var userEmail = "test@example.com";
             var mockFile = CreateMockFile("to-delete.txt", "content");
-            var (storedFileName, filePath) = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            var saveResult = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            Assert.True(saveResult.IsSuccess);
 
             // Verify file exists before deletion
-            Assert.True(File.Exists(filePath));
+            Assert.True(File.Exists(saveResult.FilePath));
 
             // Act
-            var result = await _service.DeleteFileAsync(storedFileName);
+            var deleteResult = await _service.DeleteFileAsync(saveResult.StoredFileName);
 
             // Assert
-            Assert.True(result);
-            Assert.False(File.Exists(filePath));
+            Assert.True(deleteResult.IsSuccess);
+            Assert.Empty(deleteResult.ErrorMessage);
+            Assert.False(File.Exists(saveResult.FilePath));
         }
 
         [Fact]
-        public async Task DeleteFileAsync_WithNonExistentFile_ReturnsFalse()
+        public async Task DeleteFileAsync_WithNonExistentFile_ReturnsFailure()
         {
             // Arrange
             var nonExistentFileName = "non-existent-file.txt";
@@ -125,7 +213,19 @@ namespace backend_jd_api.Tests.Services
             var result = await _service.DeleteFileAsync(nonExistentFileName);
 
             // Assert
-            Assert.False(result);
+            Assert.False(result.IsSuccess);
+            Assert.Equal("File not found", result.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task DeleteFileAsync_WithNullFileName_ReturnsFailure()
+        {
+            // Act
+            var result = await _service.DeleteFileAsync(null);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("Stored filename is required", result.ErrorMessage);
         }
 
         [Fact]
@@ -155,13 +255,34 @@ namespace backend_jd_api.Tests.Services
             // Arrange
             var userEmail = "test@example.com";
             var mockFile = CreateMockFile(fileName, "content");
-            var (storedFileName, _) = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            var saveResult = await _service.SaveFileAsync(mockFile.Object, userEmail);
+            Assert.True(saveResult.IsSuccess);
 
             // Act
-            var (_, contentType, _) = await _service.GetFileAsync(storedFileName);
+            var getResult = await _service.GetFileAsync(saveResult.StoredFileName);
 
             // Assert
-            Assert.Equal(expectedContentType, contentType);
+            Assert.True(getResult.IsSuccess);
+            Assert.Equal(expectedContentType, getResult.ContentType);
+        }
+
+        [Fact]
+        public async Task SaveFileAsync_WithNonExistentUploadDirectory_HandlesGracefully()
+        {
+            // Arrange
+            var nonExistentDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "non-existent");
+            var mockEnvironment = new Mock<IWebHostEnvironment>();
+            mockEnvironment.Setup(x => x.ContentRootPath).Returns(nonExistentDirectory);
+            
+            var service = new FileStorageService(mockEnvironment.Object, _mockLogger.Object);
+            var mockFile = CreateMockFile("test.txt", "content");
+
+            // Act
+            var result = await service.SaveFileAsync(mockFile.Object, "test@example.com");
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("Upload directory is not available", result.ErrorMessage);
         }
 
         private Mock<IFormFile> CreateMockFile(string fileName, string content)

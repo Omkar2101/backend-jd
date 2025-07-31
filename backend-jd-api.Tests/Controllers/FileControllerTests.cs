@@ -45,7 +45,12 @@ namespace backend_jd_api.Tests.Controllers
 
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ReturnsAsync((fileData, contentType, originalFileName));
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = true,
+                    FileData = fileData,
+                    ContentType = contentType,
+                    FileName = originalFileName
+                });
 
             // Act
             var result = await _controller.DownloadFile(fileName);
@@ -65,14 +70,18 @@ namespace backend_jd_api.Tests.Controllers
             
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ThrowsAsync(new FileNotFoundException());
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = false,
+                    ErrorMessage = "File not found"
+                });
 
             // Act
             var result = await _controller.DownloadFile(fileName);
 
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
-            Assert.Equal("File not found", notFoundResult.Value);
+            var errorResponse = Assert.IsAssignableFrom<object>(notFoundResult.Value);
+            Assert.Equal(404, Assert.IsAssignableFrom<dynamic>(errorResponse).status_code);
         }
 
         [Fact]
@@ -83,15 +92,18 @@ namespace backend_jd_api.Tests.Controllers
             
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ThrowsAsync(new Exception("Database error"));
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = false,
+                    ErrorMessage = "Service error occurred"
+                });
 
             // Act
             var result = await _controller.DownloadFile(fileName);
 
             // Assert
-            var errorResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, errorResult.StatusCode);
-            Assert.Equal("Error retrieving file", errorResult.Value);
+            var errorResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = Assert.IsAssignableFrom<object>(errorResult.Value);
+            Assert.Equal(422, Assert.IsAssignableFrom<dynamic>(errorResponse).status_code);
         }
 
         [Fact]
@@ -105,7 +117,12 @@ namespace backend_jd_api.Tests.Controllers
 
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ReturnsAsync((fileData, contentType, originalFileName));
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = true,
+                    FileData = fileData,
+                    ContentType = contentType,
+                    FileName = originalFileName
+                });
 
             // Act
             var result = await _controller.ViewFile(fileName);
@@ -128,7 +145,12 @@ namespace backend_jd_api.Tests.Controllers
 
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ReturnsAsync((fileData, contentType, originalFileName));
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = true,
+                    FileData = fileData,
+                    ContentType = contentType,
+                    FileName = originalFileName
+                });
 
             // Act
             await _controller.ViewFile(fileName);
@@ -153,14 +175,18 @@ namespace backend_jd_api.Tests.Controllers
             
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ThrowsAsync(new FileNotFoundException());
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = false,
+                    ErrorMessage = "File not found"
+                });
 
             // Act
             var result = await _controller.ViewFile(fileName);
 
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
-            Assert.Equal("File not found", notFoundResult.Value);
+            var errorResponse = Assert.IsAssignableFrom<object>(notFoundResult.Value);
+            Assert.Equal(404, Assert.IsAssignableFrom<dynamic>(errorResponse).status_code);
         }
 
         [Fact]
@@ -171,15 +197,18 @@ namespace backend_jd_api.Tests.Controllers
             
             _mockFileService
                 .Setup(x => x.GetFileAsync(fileName))
-                .ThrowsAsync(new Exception("Service error"));
+                .ReturnsAsync(new FileRetrievalResult { 
+                    IsSuccess = false,
+                    ErrorMessage = "Service error occurred"
+                });
 
             // Act
             var result = await _controller.ViewFile(fileName);
 
             // Assert
-            var errorResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, errorResult.StatusCode);
-            Assert.Equal("Error retrieving file", errorResult.Value);
+            var errorResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = Assert.IsAssignableFrom<object>(errorResult.Value);
+            Assert.Equal(422, Assert.IsAssignableFrom<dynamic>(errorResponse).status_code);
         }
     }
 }

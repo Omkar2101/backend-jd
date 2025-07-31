@@ -58,40 +58,45 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var expectedResponse = new JobResponse
-            {
-                Id = "507f1f77bcf86cd799439011",
-                OriginalText = fileContent,
-                ImprovedText = "Improved job description content",
-                FileName = "test.txt",
-                UserEmail = "test@example.com",
-                CreatedAt = DateTime.UtcNow,
-                Analysis = new AnalysisResult
+            var serviceResult = new JobAnalysisResult 
+            { 
+                IsSuccess = true,
+                JobResponse = new JobResponse
                 {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = fileContent,
                     ImprovedText = "Improved job description content",
-                    role = "Software Developer",
-                    industry = "Technology",
-                    overall_assessment = "Good job description with minor improvements needed",
-                    Issues = new List<Issue>(),
-                    suggestions = new List<Suggestion>()
+                    FileName = "test.txt",
+                    UserEmail = "test@example.com",
+                    CreatedAt = DateTime.UtcNow,
+                    Analysis = new AnalysisResult
+                    {
+                        ImprovedText = "Improved job description content",
+                        role = "Software Developer",
+                        industry = "Technology",
+                        overall_assessment = "Good job description with minor improvements needed",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>()
+                    }
                 }
             };
 
             _mockJobService
                 .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ReturnsAsync(expectedResponse);
+                .ReturnsAsync(serviceResult);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobResponse>(okResult.Value);
-            Assert.Equal(expectedResponse.Id, response.Id);
-            Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
-            Assert.Equal(expectedResponse.ImprovedText, response.ImprovedText);
-            Assert.Equal(expectedResponse.FileName, response.FileName);
-            Assert.Equal(expectedResponse.UserEmail, response.UserEmail);
+            var response = Assert.IsType<JobAnalysisResult>(okResult.Value);
+            Assert.True(response.IsSuccess);
+            Assert.Equal(serviceResult.JobResponse.Id, response.JobResponse.Id);
+            Assert.Equal(serviceResult.JobResponse.OriginalText, response.JobResponse.OriginalText);
+            Assert.Equal(serviceResult.JobResponse.ImprovedText, response.JobResponse.ImprovedText);
+            Assert.Equal(serviceResult.JobResponse.FileName, response.JobResponse.FileName);
+            Assert.Equal(serviceResult.JobResponse.UserEmail, response.JobResponse.UserEmail);
 
             // Verify service calls
             _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
@@ -112,20 +117,15 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            // Check if it's an anonymous object with error properties
-            var errorType = errorResponse.GetType();
-            var errorProperty = errorType.GetProperty("error");
-            var messageProperty = errorType.GetProperty("message");
-            var typeProperty = errorType.GetProperty("type");
-            var statusCodeProperty = errorType.GetProperty("status_code");
-
-            Assert.NotNull(errorProperty);
-            Assert.True((bool)errorProperty.GetValue(errorResponse));
-            Assert.Equal("No file uploaded", messageProperty.GetValue(errorResponse));
-            Assert.Equal("validation_error", typeProperty.GetValue(errorResponse));
-            Assert.Equal(400, statusCodeProperty.GetValue(errorResponse));
+            Assert.True((bool)JsonSerializer.Deserialize<bool>(errorDict["error"].ToString()));
+            Assert.Equal("No file uploaded", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Fact]
@@ -147,10 +147,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("No file uploaded", messageProperty.GetValue(errorResponse));
+            Assert.Equal("No file uploaded", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Fact]
@@ -169,10 +173,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("User email is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("User email is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Fact]
@@ -191,10 +199,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("User email is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("User email is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Theory]
@@ -217,11 +229,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            var message = messageProperty.GetValue(errorResponse).ToString();
-            Assert.Contains("Invalid file type", message);
+            Assert.Contains("Invalid file type", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Fact]
@@ -245,10 +260,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
-            var errorResponse = badRequestResult.Value;
+            var errorResponse = Assert.IsAssignableFrom<object>(badRequestResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("File size too large. Maximum allowed size is 10MB.", messageProperty.GetValue(errorResponse));
+            Assert.Equal("File size too large. Maximum allowed size is 10MB.", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
         }
 
         [Theory]
@@ -270,39 +289,47 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var expectedResponse = new JobResponse
+            var serviceResult = new JobAnalysisResult
             {
-                Id = "507f1f77bcf86cd799439011",
-                OriginalText = fileContent,
-                ImprovedText = "Improved content",
-                FileName = fileName,
-                UserEmail = "test@example.com",
-                CreatedAt = DateTime.UtcNow,
-                Analysis = new AnalysisResult
+                IsSuccess = true,
+                JobResponse = new JobResponse
                 {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = fileContent,
                     ImprovedText = "Improved content",
-                    role = "Software Developer",
-                    industry = "Technology",
-                    overall_assessment = "Good job description",
-                    Issues = new List<Issue>(),
-                    suggestions = new List<Suggestion>()
+                    FileName = fileName,
+                    UserEmail = "test@example.com",
+                    CreatedAt = DateTime.UtcNow,
+                    Analysis = new AnalysisResult
+                    {
+                        ImprovedText = "Improved content",
+                        role = "Software Developer",
+                        industry = "Technology",
+                        overall_assessment = "Good job description",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>()
+                    }
                 }
             };
 
             _mockJobService
                 .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ReturnsAsync(expectedResponse);
+                .ReturnsAsync(serviceResult);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
+            var response = Assert.IsType<JobAnalysisResult>(okResult.Value);
+            Assert.True(response.IsSuccess);
+            Assert.Equal(serviceResult.JobResponse.Id, response.JobResponse.Id);
+            Assert.Equal(serviceResult.JobResponse.FileName, response.JobResponse.FileName);
             _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
 
         [Fact]
-        public async Task UploadFile_HttpRequestException_ReturnsServiceUnavailable()
+        public async Task UploadFile_ServiceError_ReturnsUnprocessableEntity()
         {
             // Arrange
             var fileContent = "This is a test job description content that is longer than 50 characters.";
@@ -315,17 +342,21 @@ namespace backend_jd_api.Tests.Controllers
 
             _mockJobService
                 .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ThrowsAsync(new HttpRequestException("Service error"));
+                .ReturnsAsync((JobAnalysisResult)null);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(503, statusCodeResult.StatusCode);
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = Assert.IsAssignableFrom<object>(unprocessableEntityResult.Value);
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Unable to process", errorDict["message"].ToString());
             Assert.Equal("Our AI analysis service is temporarily unavailable. Please try again in a few moments.", messageProperty.GetValue(errorResponse));
         }
 
