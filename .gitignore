@@ -51,6 +51,14 @@ Generated_Code/
 .env
 secrets.json
 
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+
+
 ## Entity Framework
 Migrations/
 
