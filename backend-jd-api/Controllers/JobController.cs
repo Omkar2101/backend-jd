@@ -133,7 +133,7 @@ namespace backend_jd_api.Controllers
         /// </summary>
         private object CreateErrorResponse(string message, string type = "error", int statusCode = 400) // FIXED: Changed default from 500 to 400
         {
-            return new
+            return new ErrorResponse
             {
                 error = true,
                 message = message,
@@ -186,7 +186,7 @@ namespace backend_jd_api.Controllers
                 ));
             }
 
-            return Ok(serviceResult);
+            return Ok(serviceResult.JobResponse);
 
         }
 
@@ -194,29 +194,28 @@ namespace backend_jd_api.Controllers
         /// Analyze text directly for bias
         /// </summary>
         [HttpPost("analyze")]
-        // FIXED: Issue #3 - Added ProducesResponseType attributes
-        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)] // Success response from _jobService.AnalyzeTextAsync
+        [ProducesResponseType(typeof(JobResponse), StatusCodes.Status200OK)] // Now correctly returns JobResponse
         [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)] // Validation errors
         [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)] // Service errors handled gracefully
         public async Task<IActionResult> AnalyzeText([FromBody] AnalyzeRequest request)
         {
-            // FIXED: Issue #1 - Removed unnecessary try-catch, handle errors properly with BadRequest
             if (string.IsNullOrEmpty(request.Text))
                 return BadRequest(CreateErrorResponse("Text is required", "validation_error", 400));
 
             if (string.IsNullOrEmpty(request.UserEmail))
                 return BadRequest(CreateErrorResponse("User email is required", "validation_error", 400));
 
-            // Enhanced text validation - FIXED: Issue #2 - Now using ValidationResult class instead of tuple
+            // Enhanced text validation
             var validation = ValidateJobDescriptionText(request.Text);
             if (!validation.IsValid)
             {
                 return BadRequest(CreateErrorResponse(validation.ErrorMessage, "validation_error", 400));
             }
 
-            // FIXED: Issue #4 - Handle service calls gracefully without throwing exceptions
+            // Call service method
             var serviceResult = await _jobService.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle);
 
+            // Handle service result properly
             if (serviceResult == null)
             {
                 _logger.LogWarning("Service returned null result for text analysis");
@@ -227,46 +226,92 @@ namespace backend_jd_api.Controllers
                 ));
             }
 
-            return Ok(serviceResult);
+            // Check if service operation was successful
+            if (!serviceResult.IsSuccess)
+            {
+                _logger.LogWarning("Service analysis failed: {ErrorMessage}", serviceResult.ErrorMessage);
+                return BadRequest(CreateErrorResponse(
+                    serviceResult.ErrorMessage,
+                    "service_error",
+                    400
+                ));
+            }
 
+            // Check if JobResponse is available
+            if (serviceResult.JobResponse == null)
+            {
+                _logger.LogWarning("Service returned success but JobResponse is null");
+                return UnprocessableEntity(CreateErrorResponse(
+                    "Analysis completed but response data is unavailable.",
+                    "processing_error",
+                    422
+                ));
+            }
 
+            // Return the JobResponse directly
+            return Ok(serviceResult.JobResponse);
         }
 
         /// <summary>
         /// Get a specific job analysis by ID
         /// </summary>
         [HttpGet("{id}")]
-        // FIXED: Issue #3 - Added ProducesResponseType attributes
-        [ProducesResponseType(typeof(JobDescription), StatusCodes.Status200OK)] // Assuming JobDescription is the return type
+        [ProducesResponseType(typeof(JobResponse), StatusCodes.Status200OK)] // Returns JobResponse on success
         [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)] // Validation errors
         [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)] // Job not found
         [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)] // Service errors
         public async Task<IActionResult> GetJob(string id)
         {
-            // FIXED: Issue #1 - Removed unnecessary try-catch, handle errors properly with BadRequest
             if (string.IsNullOrEmpty(id))
                 return BadRequest(CreateErrorResponse("Job ID is required", "validation_error", 400));
 
-            // FIXED: Issue #4 - Handle service calls gracefully without throwing exceptions
-            var job = await _jobService.GetJobAsync(id);
-            if (job == null)
+            // Call service method
+            var serviceResult = await _jobService.GetJobAsync(id);
+
+            // Handle service result properly
+            if (serviceResult == null)
+            {
+                _logger.LogWarning("Service returned null result for job ID: {Id}", id);
+                return UnprocessableEntity(CreateErrorResponse(
+                    "Unable to retrieve job at this time. Please try again later.",
+                    "processing_error",
+                    422
+                ));
+            }
+
+            // Check if service operation was successful
+            if (!serviceResult.IsSuccess)
+            {
+                _logger.LogWarning("Service job retrieval failed: {ErrorMessage}", serviceResult.ErrorMessage);
+
+                // Check if it's a "not found" error
+                if (serviceResult.ErrorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(CreateErrorResponse(serviceResult.ErrorMessage, "not_found", 404));
+
+                // For other errors, return BadRequest
+                return BadRequest(CreateErrorResponse(serviceResult.ErrorMessage, "service_error", 400));
+            }
+
+            // Check if JobResponse is available
+            if (serviceResult.JobResponse == null)
+            {
+                _logger.LogWarning("Service returned success but JobResponse is null for job ID: {Id}", id);
                 return NotFound(CreateErrorResponse("Job not found", "not_found", 404));
+            }
 
-            return Ok(job);
-
+            // Return the JobResponse directly
+            return Ok(serviceResult.JobResponse);
         }
 
         /// <summary>
         /// Get all job analyses with pagination
         /// </summary>
         [HttpGet]
-        // FIXED: Issue #3 - Added ProducesResponseType attributes
-        [ProducesResponseType(typeof(List<JobDescription>), StatusCodes.Status200OK)] // Assuming List<JobDescription> is the return type
+        [ProducesResponseType(typeof(List<JobResponse>), StatusCodes.Status200OK)] // Returns List<JobResponse> on success
         [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)] // Validation errors
         [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)] // Service errors
         public async Task<IActionResult> GetAllJobs([FromQuery] int skip = 0, [FromQuery] int limit = 20)
         {
-            // FIXED: Issue #1 - Removed unnecessary try-catch, handle errors properly with BadRequest
             // Validate pagination parameters
             if (skip < 0)
                 return BadRequest(CreateErrorResponse("Skip parameter cannot be negative", "validation_error", 400));
@@ -274,9 +319,11 @@ namespace backend_jd_api.Controllers
             if (limit <= 0 || limit > 100)
                 return BadRequest(CreateErrorResponse("Limit must be between 1 and 100", "validation_error", 400));
 
-            // FIXED: Issue #4 - Handle service calls gracefully without throwing exceptions
-            var jobs = await _jobService.GetAllJobsAsync(skip, limit);
-            if (jobs == null)
+            // Call service method
+            var serviceResult = await _jobService.GetAllJobsAsync(skip, limit);
+
+            // Handle service result properly
+            if (serviceResult == null)
             {
                 _logger.LogWarning("Service returned null result for GetAllJobs");
                 return UnprocessableEntity(CreateErrorResponse(
@@ -286,8 +333,26 @@ namespace backend_jd_api.Controllers
                 ));
             }
 
-            return Ok(jobs);
+            // Check if service operation was successful
+            if (!serviceResult.IsSuccess)
+            {
+                _logger.LogWarning("Service GetAllJobs failed: {ErrorMessage}", serviceResult.ErrorMessage);
+                return BadRequest(CreateErrorResponse(serviceResult.ErrorMessage, "service_error", 400));
+            }
 
+            // Check if Jobs list is available
+            if (serviceResult.Jobs == null)
+            {
+                _logger.LogWarning("Service returned success but Jobs list is null");
+                return UnprocessableEntity(CreateErrorResponse(
+                    "Jobs retrieval completed but data is unavailable.",
+                    "processing_error",
+                    422
+                ));
+            }
+
+            // Return the Jobs list directly
+            return Ok(serviceResult.Jobs);
         }
 
         /// <summary>
@@ -329,29 +394,40 @@ namespace backend_jd_api.Controllers
         /// Delete a specific job description by ID
         /// </summary>
         [HttpDelete("{id}")]
-        // FIXED: Issue #3 - Added ProducesResponseType attributes
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)] // Success deletion
         [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)] // Validation errors
         [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)] // Job not found
         [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)] // Service errors
         public async Task<IActionResult> DeleteJob(string id)
         {
-            // FIXED: Issue #1 - Removed unnecessary try-catch, handle errors properly with BadRequest
-            if (string.IsNullOrEmpty(id))
+            if (string.IsNullOrWhiteSpace(id)) // Changed to WhiteSpace to handle "   " cases
                 return BadRequest(CreateErrorResponse("Job ID is required", "validation_error", 400));
 
-            // FIXED: Issue #4 - Handle service calls gracefully without throwing exceptions
-            var deleted = await _jobService.DeleteJobAsync(id);
+            // Call service method
+            var serviceResult = await _jobService.DeleteJobAsync(id);
 
-            // Check if the operation was successful
-            if (!deleted.IsSuccess)
+            // Handle service result properly
+            if (serviceResult == null)
             {
-                // Check if it's a "not found" error or other error
-                if (deleted.ErrorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                    return NotFound(CreateErrorResponse(deleted.ErrorMessage, "not_found", 404));
+                _logger.LogWarning("Service returned null result for delete job ID: {Id}", id);
+                return UnprocessableEntity(CreateErrorResponse(
+                    "Unable to delete job at this time. Please try again later.",
+                    "processing_error",
+                    422
+                ));
+            }
+
+            // Check if service operation was successful
+            if (!serviceResult.IsSuccess)
+            {
+                _logger.LogWarning("Service job deletion failed: {ErrorMessage}", serviceResult.ErrorMessage);
+
+                // Check if it's a "not found" error
+                if (serviceResult.ErrorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(CreateErrorResponse(serviceResult.ErrorMessage, "not_found", 404));
 
                 // For other errors, return BadRequest
-                return BadRequest(CreateErrorResponse(deleted.ErrorMessage, "service_error", 400));
+                return BadRequest(CreateErrorResponse(serviceResult.ErrorMessage, "service_error", 400));
             }
 
             return Ok(new { message = "Job deleted successfully", id });

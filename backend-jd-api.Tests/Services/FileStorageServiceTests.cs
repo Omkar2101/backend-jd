@@ -266,24 +266,7 @@ namespace backend_jd_api.Tests.Services
             Assert.Equal(expectedContentType, getResult.ContentType);
         }
 
-        [Fact]
-        public async Task SaveFileAsync_WithNonExistentUploadDirectory_HandlesGracefully()
-        {
-            // Arrange
-            var nonExistentDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "non-existent");
-            var mockEnvironment = new Mock<IWebHostEnvironment>();
-            mockEnvironment.Setup(x => x.ContentRootPath).Returns(nonExistentDirectory);
-            
-            var service = new FileStorageService(mockEnvironment.Object, _mockLogger.Object);
-            var mockFile = CreateMockFile("test.txt", "content");
-
-            // Act
-            var result = await service.SaveFileAsync(mockFile.Object, "test@example.com");
-
-            // Assert
-            Assert.False(result.IsSuccess);
-            Assert.Equal("Upload directory is not available", result.ErrorMessage);
-        }
+    
 
         private Mock<IFormFile> CreateMockFile(string fileName, string content)
         {

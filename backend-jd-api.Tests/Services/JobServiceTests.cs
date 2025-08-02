@@ -1,5 +1,7 @@
-
-
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using Xunit;
 using Moq;
 using Microsoft.Extensions.Logging;
@@ -7,10 +9,7 @@ using Microsoft.AspNetCore.Http;
 using backend_jd_api.Services;
 using backend_jd_api.Models;
 using backend_jd_api.Data;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+
 
 namespace backend_jd_api.Tests.Services
 {
@@ -20,7 +19,7 @@ namespace backend_jd_api.Tests.Services
         private readonly Mock<PythonService> _mockPythonService;
         private readonly Mock<IFileStorageService> _mockFileStorageService;
         private readonly Mock<ILogger<JobService>> _mockLogger;
-        
+
         private readonly JobService _service;
 
         public JobServiceTests()
@@ -61,12 +60,31 @@ namespace backend_jd_api.Tests.Services
                 suggestions = new List<Suggestion>()
             };
 
-            _mockFileStorageService.Setup(s => s.SaveFileAsync(file, userEmail))
-                .ReturnsAsync(("storedname.txt", "/files/storedname.txt"));
-            _mockPythonService.Setup(p => p.ExtractTextFromFileAsync(It.IsAny<byte[]>(), file.FileName))
-                .ReturnsAsync(extractedText);
-            _mockPythonService.Setup(p => p.AnalyzeTextAsync(extractedText))
-                .ReturnsAsync(analysis);
+            _mockFileStorageService
+                .Setup(s => s.SaveFileAsync(file, userEmail))
+                .ReturnsAsync(new FileStorageResult
+                {
+                    IsSuccess = true,
+                    StoredFileName = "storedname.txt",
+                    FilePath = "/files/storedname.txt"
+                });
+
+            _mockPythonService
+                .Setup(p => p.ExtractTextFromFileAsync(It.IsAny<byte[]>(), file.FileName))
+                .ReturnsAsync(new TextExtractionResult
+                {
+                    IsSuccess = true,
+                    ExtractedText = extractedText
+                });
+
+            _mockPythonService
+                .Setup(p => p.AnalyzeTextAsync(extractedText))
+                .ReturnsAsync(new AnalysisServiceResult
+                {
+                    IsSuccess = true,
+                    AnalysisResult = analysis
+                });
+
             _mockFileStorageService.Setup(s => s.GetFileUrl("storedname.txt"))
                 .Returns("https://fileserver.com/storedname.txt");
 
@@ -79,30 +97,41 @@ namespace backend_jd_api.Tests.Services
 
             var result = await _service.AnalyzeFromFileAsync(file, userEmail);
 
-            Assert.NotNull(result);
-            Assert.Equal("job123", result.Id);
-            Assert.Equal(userEmail, result.UserEmail);
-            Assert.Equal(extractedText, result.OriginalText);
-            Assert.Equal("Improved text", result.ImprovedText);
-            Assert.Equal("jobdesc.txt", result.FileName);
-            Assert.Equal("https://fileserver.com/storedname.txt", result.FileUrl);
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.JobResponse);
+            Assert.Equal("job123", result.JobResponse.Id);
+            Assert.Equal(userEmail, result.JobResponse.UserEmail);
+            Assert.Equal(extractedText, result.JobResponse.OriginalText);
+            Assert.Equal("Improved text", result.JobResponse.ImprovedText);
+            Assert.Equal("jobdesc.txt", result.JobResponse.FileName);
+            Assert.Equal("https://fileserver.com/storedname.txt", result.JobResponse.FileUrl);
         }
 
         [Fact]
-        public async Task AnalyzeFromFileAsync_EmptyExtractedText_ThrowsExceptionAndDeletesFile()
+        public async Task AnalyzeFromFileAsync_EmptyExtractedText_ReturnsFailureAndDeletesFile()
         {
             var file = CreateMockFile("empty.txt", "some content");
             var userEmail = "user@example.com";
 
             _mockFileStorageService.Setup(s => s.SaveFileAsync(file, userEmail))
-                .ReturnsAsync(("storedname.txt", "/files/storedname.txt"));
+                .ReturnsAsync(new FileStorageResult
+                {
+                    IsSuccess = true,
+                    StoredFileName = "storedname.txt",
+                    FilePath = "/files/storedname.txt"
+                });
+
             _mockPythonService.Setup(p => p.ExtractTextFromFileAsync(It.IsAny<byte[]>(), file.FileName))
-                .ReturnsAsync(string.Empty);
-           
+                .ReturnsAsync(new TextExtractionResult
+                {
+                    IsSuccess = true,
+                    ExtractedText = string.Empty
+                });
 
-            var ex = await Assert.ThrowsAsync<Exception>(() => _service.AnalyzeFromFileAsync(file, userEmail));
-            Assert.Contains("No text could be extracted from the file", ex.Message);
+            var result = await _service.AnalyzeFromFileAsync(file, userEmail);
 
+            Assert.False(result.IsSuccess);
+            Assert.Contains("No text could be extracted from the file", result.ErrorMessage);
             _mockFileStorageService.Verify(s => s.DeleteFileAsync("storedname.txt"), Times.Once);
         }
 
@@ -113,7 +142,13 @@ namespace backend_jd_api.Tests.Services
             var userEmail = "user@example.com";
             var analysis = new AnalysisResult { ImprovedText = "Improved text", suggestions = new List<Suggestion>() };
 
-            _mockPythonService.Setup(p => p.AnalyzeTextAsync(text)).ReturnsAsync(analysis);
+            _mockPythonService.Setup(p => p.AnalyzeTextAsync(text))
+                .ReturnsAsync(new AnalysisServiceResult
+                {
+                    IsSuccess = true,
+                    AnalysisResult = analysis
+                });
+
             _mockDb.Setup(db => db.CreateJobAsync(It.IsAny<JobDescription>())).ReturnsAsync((JobDescription jd) =>
             {
                 jd.Id = "jobTxt123";
@@ -122,22 +157,25 @@ namespace backend_jd_api.Tests.Services
 
             var result = await _service.AnalyzeTextAsync(text, userEmail, "Job Title");
 
-            Assert.NotNull(result);
-            Assert.Equal("jobTxt123", result.Id);
-            Assert.Equal(userEmail, result.UserEmail);
-            Assert.Equal(text, result.OriginalText);
-            Assert.Equal("Improved text", result.ImprovedText);
-            Assert.Equal("Job Title", result.FileName);
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.JobResponse);
+            Assert.Equal("jobTxt123", result.JobResponse.Id);
+            Assert.Equal(userEmail, result.JobResponse.UserEmail);
+            Assert.Equal(text, result.JobResponse.OriginalText);
+            Assert.Equal("Improved text", result.JobResponse.ImprovedText);
+            Assert.Equal("Job Title", result.JobResponse.FileName);
         }
 
         [Fact]
-        public async Task AnalyzeTextAsync_ShortText_ThrowsArgumentException()
+        public async Task AnalyzeTextAsync_ShortText_ReturnsFailure()
         {
             var shortText = "Too short";
             var userEmail = "user@example.com";
 
-            var ex = await Assert.ThrowsAsync<ArgumentException>(() => _service.AnalyzeTextAsync(shortText, userEmail));
-            Assert.Contains("at least 50 characters", ex.Message);
+            var result = await _service.AnalyzeTextAsync(shortText, userEmail);
+
+            Assert.False(result.IsSuccess);
+            Assert.Contains("at least 50 characters", result.ErrorMessage);
         }
 
         [Fact]
@@ -162,21 +200,23 @@ namespace backend_jd_api.Tests.Services
 
             var result = await _service.GetJobAsync(jobId);
 
-            Assert.NotNull(result);
-            Assert.Equal(jobId, result.Id);
-            Assert.Equal("user@example.com", result.UserEmail);
-            Assert.Equal("https://fileserver.com/storedFile.txt", result.FileUrl);
+            Assert.True(result.IsSuccess);
+            Assert.NotNull(result.JobResponse);
+            Assert.Equal(jobId, result.JobResponse.Id);
+            Assert.Equal("user@example.com", result.JobResponse.UserEmail);
+            Assert.Equal("https://fileserver.com/storedFile.txt", result.JobResponse.FileUrl);
         }
 
         [Fact]
-        public async Task GetJobAsync_NonExistingJob_ReturnsNull()
+        public async Task GetJobAsync_NonExistingJob_ReturnsFailure()
         {
             var jobId = "nonexistent";
             _mockDb.Setup(db => db.GetJobAsync(jobId)).ReturnsAsync((JobDescription)null);
 
             var result = await _service.GetJobAsync(jobId);
 
-            Assert.Null(result);
+            Assert.False(result.IsSuccess);
+            Assert.Equal("Job not found", result.ErrorMessage);
         }
 
         [Fact]
@@ -186,7 +226,7 @@ namespace backend_jd_api.Tests.Services
 
             var result = await _service.DeleteJobAsync("job123");
 
-            Assert.True(result);
+            Assert.True(result.IsSuccess);
         }
 
         [Fact]
@@ -196,8 +236,8 @@ namespace backend_jd_api.Tests.Services
 
             var result = await _service.DeleteJobAsync("job123");
 
-            Assert.False(result);
+            Assert.False(result.IsSuccess);
+            Assert.Equal("Job not found", result.ErrorMessage);
         }
     }
 }
-

@@ -6,6 +6,7 @@ using Moq;
 using Xunit;
 using backend_jd_api.Controllers;
 using backend_jd_api.Services;
+using backend_jd_api.Models;
 
 namespace backend_jd_api.Tests.Controllers
 {
@@ -80,8 +81,9 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
-            var errorResponse = Assert.IsAssignableFrom<object>(notFoundResult.Value);
-            Assert.Equal(404, Assert.IsAssignableFrom<dynamic>(errorResponse).status_code);
+            var errorResponse = Assert.IsType<ErrorResponse>(notFoundResult.Value);
+            Assert.Equal(404, errorResponse.status_code);
+            
         }
 
         [Fact]

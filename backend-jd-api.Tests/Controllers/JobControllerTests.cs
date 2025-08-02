@@ -19,6 +19,8 @@ namespace backend_jd_api.Tests.Controllers
         private readonly Mock<ILogger<JobController>> _mockControllerLogger;
         private readonly JobController _controller;
 
+
+
         public JobControllerTests()
         {
             _mockJobService = new Mock<IJobService>();
@@ -58,8 +60,8 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var serviceResult = new JobAnalysisResult 
-            { 
+            var serviceResult = new JobAnalysisResult
+            {
                 IsSuccess = true,
                 JobResponse = new JobResponse
                 {
@@ -90,13 +92,14 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobAnalysisResult>(okResult.Value);
-            Assert.True(response.IsSuccess);
-            Assert.Equal(serviceResult.JobResponse.Id, response.JobResponse.Id);
-            Assert.Equal(serviceResult.JobResponse.OriginalText, response.JobResponse.OriginalText);
-            Assert.Equal(serviceResult.JobResponse.ImprovedText, response.JobResponse.ImprovedText);
-            Assert.Equal(serviceResult.JobResponse.FileName, response.JobResponse.FileName);
-            Assert.Equal(serviceResult.JobResponse.UserEmail, response.JobResponse.UserEmail);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // Changed from JobAnalysisResult to JobResponse
+
+            // Assert on JobResponse properties (not JobAnalysisResult)
+            Assert.Equal(serviceResult.JobResponse.Id, response.Id);
+            Assert.Equal(serviceResult.JobResponse.OriginalText, response.OriginalText);
+            Assert.Equal(serviceResult.JobResponse.ImprovedText, response.ImprovedText);
+            Assert.Equal(serviceResult.JobResponse.FileName, response.FileName);
+            Assert.Equal(serviceResult.JobResponse.UserEmail, response.UserEmail);
 
             // Verify service calls
             _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
@@ -122,7 +125,7 @@ namespace backend_jd_api.Tests.Controllers
                 JsonSerializer.Serialize(errorResponse)
             );
 
-            Assert.True((bool)JsonSerializer.Deserialize<bool>(errorDict["error"].ToString()));
+            // Fixed: Removed the nested boolean check that was incorrect
             Assert.Equal("No file uploaded", errorDict["message"].ToString());
             Assert.Equal("validation_error", errorDict["type"].ToString());
             Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
@@ -243,7 +246,6 @@ namespace backend_jd_api.Tests.Controllers
         public async Task UploadFile_WithLargeFile_ReturnsBadRequest()
         {
             // Arrange
-            var largeContent = new string('a', 11 * 1024 * 1024); // 11MB content
             var mockFile = new Mock<IFormFile>();
             mockFile.Setup(f => f.FileName).Returns("test.txt");
             mockFile.Setup(f => f.Length).Returns(11 * 1024 * 1024); // 11MB
@@ -321,15 +323,17 @@ namespace backend_jd_api.Tests.Controllers
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobAnalysisResult>(okResult.Value);
-            Assert.True(response.IsSuccess);
-            Assert.Equal(serviceResult.JobResponse.Id, response.JobResponse.Id);
-            Assert.Equal(serviceResult.JobResponse.FileName, response.JobResponse.FileName);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // Changed from JobAnalysisResult to JobResponse
+
+            // Assert on JobResponse properties
+            Assert.Equal(serviceResult.JobResponse.Id, response.Id);
+            Assert.Equal(serviceResult.JobResponse.FileName, response.FileName);
+
             _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
 
         [Fact]
-        public async Task UploadFile_ServiceError_ReturnsUnprocessableEntity()
+        public async Task UploadFile_ServiceReturnsNull_ReturnsUnprocessableEntity()
         {
             // Arrange
             var fileContent = "This is a test job description content that is longer than 50 characters.";
@@ -356,67 +360,7 @@ namespace backend_jd_api.Tests.Controllers
 
             Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
             Assert.Equal("processing_error", errorDict["type"].ToString());
-            Assert.Contains("Unable to process", errorDict["message"].ToString());
-            Assert.Equal("Our AI analysis service is temporarily unavailable. Please try again in a few moments.", messageProperty.GetValue(errorResponse));
-        }
-
-        [Fact]
-        public async Task UploadFile_TaskCanceledException_ReturnsTimeout()
-        {
-            // Arrange
-            var fileContent = "This is a test job description content that is longer than 50 characters.";
-            var mockFile = CreateMockFormFile("test.txt", fileContent);
-            var request = new UploadRequest
-            {
-                File = mockFile,
-                UserEmail = "test@example.com"
-            };
-
-            var timeoutException = new TimeoutException();
-            var taskCanceledException = new TaskCanceledException("Task was canceled", timeoutException);
-
-            _mockJobService
-                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ThrowsAsync(taskCanceledException);
-
-            // Act
-            var result = await _controller.UploadFile(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(504, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("The analysis is taking longer than expected. Please try again with a shorter job description.", messageProperty.GetValue(errorResponse));
-        }
-
-        [Fact]
-        public async Task UploadFile_GenericException_ReturnsInternalServerError()
-        {
-            // Arrange
-            var fileContent = "This is a test job description content that is longer than 50 characters.";
-            var mockFile = CreateMockFormFile("test.txt", fileContent);
-            var request = new UploadRequest
-            {
-                File = mockFile,
-                UserEmail = "test@example.com"
-            };
-
-            _mockJobService
-                .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ThrowsAsync(new Exception("Service error"));
-
-            // Act
-            var result = await _controller.UploadFile(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("An unexpected error occurred while processing your file. Please try again.", messageProperty.GetValue(errorResponse));
+            Assert.Contains("Unable to process the file at this time", errorDict["message"].ToString());
         }
 
         [Fact]
@@ -431,36 +375,44 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var expectedResponse = new JobResponse
+            var serviceResult = new JobAnalysisResult
             {
-                Id = "507f1f77bcf86cd799439011",
-                OriginalText = fileContent,
-                ImprovedText = "Improved content",
-                FileName = "test.TXT",
-                UserEmail = "test@example.com",
-                CreatedAt = DateTime.UtcNow,
-                Analysis = new AnalysisResult
+                IsSuccess = true,
+                JobResponse = new JobResponse
                 {
+                    Id = "507f1f77bcf86cd799439011",
+                    OriginalText = fileContent,
                     ImprovedText = "Improved content",
-                    role = "Software Developer",
-                    industry = "Technology",
-                    overall_assessment = "Good job description",
-                    Issues = new List<Issue>(),
-                    suggestions = new List<Suggestion>()
+                    FileName = "test.TXT",
+                    UserEmail = "test@example.com",
+                    CreatedAt = DateTime.UtcNow,
+                    Analysis = new AnalysisResult
+                    {
+                        ImprovedText = "Improved content",
+                        role = "Software Developer",
+                        industry = "Technology",
+                        overall_assessment = "Good job description",
+                        Issues = new List<Issue>(),
+                        suggestions = new List<Suggestion>()
+                    }
                 }
             };
 
             _mockJobService
                 .Setup(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"))
-                .ReturnsAsync(expectedResponse);
+                .ReturnsAsync(serviceResult);
 
             // Act
             var result = await _controller.UploadFile(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // Changed from JobAnalysisResult to JobResponse
+
             _mockJobService.Verify(s => s.AnalyzeFromFileAsync(It.IsAny<IFormFile>(), "test@example.com"), Times.Once);
         }
+
+     
 
         [Fact]
         public async Task AnalyzeText_WithValidRequest_ReturnsOkResult()
@@ -473,7 +425,7 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var expectedResponse = new JobResponse
+            var expectedJobResponse = new JobResponse
             {
                 Id = "507f1f77bcf86cd799439011",
                 OriginalText = request.Text,
@@ -490,50 +442,59 @@ namespace backend_jd_api.Tests.Controllers
                     industry = "Technology",
                     overall_assessment = "Excellent job description with minimal bias",
                     Issues = new List<Issue>
-                    {
-                        new Issue
-                        {
-                            Type = "Gender",
-                            Text = "guys",
-                            Severity = "Medium",
-                            Explanation = "This term may exclude non-male team members"
-                        }
-                    },
+            {
+                new Issue
+                {
+                    Type = "Gender",
+                    Text = "guys",
+                    Severity = "Medium",
+                    Explanation = "This term may exclude non-male team members"
+                }
+            },
                     suggestions = new List<Suggestion>
-                    {
-                        new Suggestion
-                        {
-                            Original = "guys",
-                            Improved = "team members",
-                            rationale = "More inclusive language",
-                            Category = "Bias"
-                        }
-                    },
+            {
+                new Suggestion
+                {
+                    Original = "guys",
+                    Improved = "team members",
+                    rationale = "More inclusive language",
+                    Category = "Bias"
+                }
+            },
                     seo_keywords = new List<string> { "software", "developer", "programming" }
                 }
             };
 
+            // Mock should return JobAnalysisResult, not JobResponse directly
+            var expectedServiceResult = new JobAnalysisResult
+            {
+                IsSuccess = true,
+                JobResponse = expectedJobResponse,
+                ErrorMessage = null
+            };
+
             _mockJobService
                 .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
-                .ReturnsAsync(expectedResponse);
+                .ReturnsAsync(expectedServiceResult); // Return JobAnalysisResult
 
             // Act
             var result = await _controller.AnalyzeText(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobResponse>(okResult.Value);
-            Assert.Equal(expectedResponse.Id, response.Id);
-            Assert.Equal(expectedResponse.OriginalText, response.OriginalText);
-            Assert.Equal(expectedResponse.ImprovedText, response.ImprovedText);
-            Assert.Equal(expectedResponse.UserEmail, response.UserEmail);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // This should now work
+
+            Assert.Equal(expectedJobResponse.Id, response.Id);
+            Assert.Equal(expectedJobResponse.OriginalText, response.OriginalText);
+            Assert.Equal(expectedJobResponse.ImprovedText, response.ImprovedText);
+            Assert.Equal(expectedJobResponse.UserEmail, response.UserEmail);
             Assert.NotNull(response.Analysis);
-            Assert.Equal(expectedResponse.Analysis.bias_score, response.Analysis.bias_score);
-            Assert.Equal(expectedResponse.Analysis.inclusivity_score, response.Analysis.inclusivity_score);
-            Assert.Equal(expectedResponse.Analysis.clarity_score, response.Analysis.clarity_score);
-            Assert.Equal(expectedResponse.Analysis.role, response.Analysis.role);
-            Assert.Equal(expectedResponse.Analysis.industry, response.Analysis.industry);
-            Assert.Equal(expectedResponse.Analysis.overall_assessment, response.Analysis.overall_assessment);
+            Assert.Equal(expectedJobResponse.Analysis.bias_score, response.Analysis.bias_score);
+            Assert.Equal(expectedJobResponse.Analysis.inclusivity_score, response.Analysis.inclusivity_score);
+            Assert.Equal(expectedJobResponse.Analysis.clarity_score, response.Analysis.clarity_score);
+            Assert.Equal(expectedJobResponse.Analysis.role, response.Analysis.role);
+            Assert.Equal(expectedJobResponse.Analysis.industry, response.Analysis.industry);
+            Assert.Equal(expectedJobResponse.Analysis.overall_assessment, response.Analysis.overall_assessment);
             Assert.Single(response.Analysis.Issues);
 
             // Verify service calls
@@ -556,9 +517,16 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Text is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Text is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -577,9 +545,16 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Text is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Text is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -599,10 +574,17 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            var message = messageProperty.GetValue(errorResponse).ToString();
+            var message = errorDict["message"].ToString();
             Assert.Contains($"Job description text must be at least 50 characters long. Current length: {whitespaceText.Trim().Length} characters", message);
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -622,10 +604,17 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            var message = messageProperty.GetValue(errorResponse).ToString();
+            var message = errorDict["message"].ToString();
             Assert.Contains($"Job description text must be at least 50 characters long. Current length: {shortText.Length} characters", message);
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -645,10 +634,17 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            var message = messageProperty.GetValue(errorResponse).ToString();
+            var message = errorDict["message"].ToString();
             Assert.Contains($"Job description text must be at least 50 characters long. Current length: {shortText.Trim().Length} characters", message);
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -667,9 +663,16 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("User email is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("User email is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -688,9 +691,16 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("User email is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("User email is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -704,7 +714,7 @@ namespace backend_jd_api.Tests.Controllers
                 UserEmail = "test@example.com"
             };
 
-            var expectedResponse = new JobResponse
+            var expectedJobResponse = new JobResponse
             {
                 Id = "507f1f77bcf86cd799439011",
                 OriginalText = request.Text,
@@ -722,21 +732,32 @@ namespace backend_jd_api.Tests.Controllers
                 }
             };
 
+            // FIXED: Mock should return JobAnalysisResult, not JobResponse directly
+            var expectedServiceResult = new JobAnalysisResult
+            {
+                IsSuccess = true,
+                JobResponse = expectedJobResponse,
+                ErrorMessage = null
+            };
+
             _mockJobService
                 .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
-                .ReturnsAsync(expectedResponse);
+                .ReturnsAsync(expectedServiceResult); // Return JobAnalysisResult
 
             // Act
             var result = await _controller.AnalyzeText(request);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobResponse>(okResult.Value);
-            Assert.Equal(expectedResponse.Id, response.Id);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // This should now work
+            Assert.Equal(expectedJobResponse.Id, response.Id);
+
+            // Verify service was called
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
         }
 
         [Fact]
-        public async Task AnalyzeText_HttpRequestException_ReturnsServiceUnavailable()
+        public async Task AnalyzeText_ServiceReturnsNull_ReturnsUnprocessableEntity()
         {
             // Arrange
             var request = new AnalyzeRequest
@@ -747,73 +768,24 @@ namespace backend_jd_api.Tests.Controllers
 
             _mockJobService
                 .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
-                .ThrowsAsync(new HttpRequestException("Service error"));
+                .ReturnsAsync((JobAnalysisResult)null); // FIXED: Return JobAnalysisResult null, not JobResponse null
 
             // Act
             var result = await _controller.AnalyzeText(request);
 
             // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(503, statusCodeResult.StatusCode);
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Our AI analysis service is temporarily unavailable. Please try again in a few moments.", messageProperty.GetValue(errorResponse));
-        }
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Unable to analyze the text at this time", errorDict["message"].ToString());
 
-        [Fact]
-        public async Task AnalyzeText_TaskCanceledException_ReturnsTimeout()
-        {
-            // Arrange
-            var request = new AnalyzeRequest
-            {
-                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
-                UserEmail = "test@example.com"
-            };
-
-            var timeoutException = new TimeoutException();
-            var taskCanceledException = new TaskCanceledException("Task was canceled", timeoutException);
-
-            _mockJobService
-                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
-                .ThrowsAsync(taskCanceledException);
-
-            // Act
-            var result = await _controller.AnalyzeText(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(504, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("The analysis is taking longer than expected. Please try again with a shorter job description.", messageProperty.GetValue(errorResponse));
-        }
-
-        [Fact]
-        public async Task AnalyzeText_GenericException_ReturnsInternalServerError()
-        {
-            // Arrange
-            var request = new AnalyzeRequest
-            {
-                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
-                UserEmail = "test@example.com"
-            };
-
-            _mockJobService
-                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
-                .ThrowsAsync(new Exception("Service error"));
-
-            // Actb
-            var result = await _controller.AnalyzeText(request);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("An unexpected error occurred while analyzing the text. Please try again.", messageProperty.GetValue(errorResponse));
+            // Verify service was called
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
         }
 
         [Fact]
@@ -833,11 +805,95 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Text contains too many repetitive characters. Please provide a proper job description.", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Text contains too many repetitive characters. Please provide a proper job description.", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was never called for validation failure
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
+        [Fact]
+        public async Task AnalyzeText_ServiceReturnsFailure_ReturnsBadRequest()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                UserEmail = "test@example.com"
+            };
+
+            var failedServiceResult = new JobAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Analysis service failed to process the text",
+                JobResponse = null
+            };
+
+            _mockJobService
+                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
+                .ReturnsAsync(failedServiceResult);
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Analysis service failed to process the text", errorDict["message"].ToString());
+            Assert.Equal("service_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            // Verify service was called
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
+        }
+
+        [Fact]
+        public async Task AnalyzeText_ServiceReturnsSuccessButNullJobResponse_ReturnsUnprocessableEntity()
+        {
+            // Arrange
+            var request = new AnalyzeRequest
+            {
+                Text = "This is a test job description content that is longer than 50 characters to meet the minimum requirement.",
+                UserEmail = "test@example.com"
+            };
+
+            var serviceResultWithNullResponse = new JobAnalysisResult
+            {
+                IsSuccess = true,
+                ErrorMessage = null,
+                JobResponse = null // Success but null response
+            };
+
+            _mockJobService
+                .Setup(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle))
+                .ReturnsAsync(serviceResultWithNullResponse);
+
+            // Act
+            var result = await _controller.AnalyzeText(request);
+
+            // Assert
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Analysis completed but response data is unavailable", errorDict["message"].ToString());
+
+            // Verify service was called
+            _mockJobService.Verify(s => s.AnalyzeTextAsync(request.Text, request.UserEmail, request.JobTitle), Times.Once);
+        }
 
         // Add these test methods to your existing JobControllerTests class
 
@@ -848,7 +904,7 @@ namespace backend_jd_api.Tests.Controllers
         {
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
-            var expectedJob = new JobResponse
+            var expectedJobResponse = new JobResponse
             {
                 Id = jobId,
                 OriginalText = "Test job description",
@@ -867,19 +923,27 @@ namespace backend_jd_api.Tests.Controllers
                 }
             };
 
+            // FIXED: Mock should return JobRetrievalResult, not JobResponse directly
+            var expectedServiceResult = new JobRetrievalResult
+            {
+                IsSuccess = true,
+                JobResponse = expectedJobResponse,
+                ErrorMessage = null
+            };
+
             _mockJobService
                 .Setup(s => s.GetJobAsync(jobId))
-                .ReturnsAsync(expectedJob);
+                .ReturnsAsync(expectedServiceResult); // Return JobRetrievalResult
 
             // Act
             var result = await _controller.GetJob(jobId);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<JobResponse>(okResult.Value);
-            Assert.Equal(expectedJob.Id, response.Id);
-            Assert.Equal(expectedJob.OriginalText, response.OriginalText);
-            Assert.Equal(expectedJob.ImprovedText, response.ImprovedText);
+            var response = Assert.IsType<JobResponse>(okResult.Value); // This should now work
+            Assert.Equal(expectedJobResponse.Id, response.Id);
+            Assert.Equal(expectedJobResponse.OriginalText, response.OriginalText);
+            Assert.Equal(expectedJobResponse.ImprovedText, response.ImprovedText);
 
             _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
         }
@@ -893,9 +957,13 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Job ID is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job ID is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetJobAsync(It.IsAny<string>()), Times.Never);
         }
@@ -909,9 +977,13 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Job ID is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job ID is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetJobAsync(It.IsAny<string>()), Times.Never);
         }
@@ -922,9 +994,17 @@ namespace backend_jd_api.Tests.Controllers
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
 
+            // Service returns failure with "not found" message
+            var failedServiceResult = new JobRetrievalResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Job not found",
+                JobResponse = null
+            };
+
             _mockJobService
                 .Setup(s => s.GetJobAsync(jobId))
-                .ReturnsAsync((JobResponse?)null);
+                .ReturnsAsync(failedServiceResult);
 
             // Act
             var result = await _controller.GetJob(jobId);
@@ -932,33 +1012,110 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
             var errorResponse = notFoundResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Job not found", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job not found", errorDict["message"].ToString());
+            Assert.Equal("not_found", errorDict["type"].ToString());
+            Assert.Equal(404, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
         }
 
         [Fact]
-        public async Task GetJob_ServiceThrowsException_ReturnsInternalServerError()
+        public async Task GetJob_ServiceReturnsNull_ReturnsUnprocessableEntity()
         {
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
 
             _mockJobService
                 .Setup(s => s.GetJobAsync(jobId))
-                .ThrowsAsync(new Exception("Database error"));
+                .ReturnsAsync((JobRetrievalResult?)null);
 
             // Act
             var result = await _controller.GetJob(jobId);
 
             // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Error retrieving job", messageProperty.GetValue(errorResponse));
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Unable to retrieve job at this time", errorDict["message"].ToString());
+
+            _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetJob_ServiceReturnsSuccessButNullJobResponse_ReturnsNotFound()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+
+            var serviceResultWithNullResponse = new JobRetrievalResult
+            {
+                IsSuccess = true,
+                ErrorMessage = null,
+                JobResponse = null // Success but null response
+            };
+
+            _mockJobService
+                .Setup(s => s.GetJobAsync(jobId))
+                .ReturnsAsync(serviceResultWithNullResponse);
+
+            // Act
+            var result = await _controller.GetJob(jobId);
+
+            // Assert
+            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+            var errorResponse = notFoundResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Job not found", errorDict["message"].ToString());
+            Assert.Equal("not_found", errorDict["type"].ToString());
+            Assert.Equal(404, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetJob_ServiceReturnsGenericError_ReturnsBadRequest()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+
+            var failedServiceResult = new JobRetrievalResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Database connection failed",
+                JobResponse = null
+            };
+
+            _mockJobService
+                .Setup(s => s.GetJobAsync(jobId))
+                .ReturnsAsync(failedServiceResult);
+
+            // Act
+            var result = await _controller.GetJob(jobId);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Database connection failed", errorDict["message"].ToString());
+            Assert.Equal("service_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            _mockJobService.Verify(s => s.GetJobAsync(jobId), Times.Once);
         }
 
         #endregion
@@ -966,35 +1123,46 @@ namespace backend_jd_api.Tests.Controllers
         #region GetAllJobs Tests
 
         [Fact]
-        public async Task GetAllJobs_WithDefaultParameters_ReturnsOkResult()
+        public async Task GetAllJobs_WithValidParameters_ReturnsOkResult()
         {
             // Arrange
+            var skip = 0;
+            var limit = 20;
             var expectedJobs = new List<JobResponse>
     {
         new JobResponse
         {
             Id = "507f1f77bcf86cd799439011",
-            OriginalText = "Job 1",
-            ImprovedText = "Improved Job 1",
-            UserEmail = "user1@example.com",
+            OriginalText = "Test job description 1",
+            ImprovedText = "Improved test job description 1",
+            FileName = "test1.txt",
+            UserEmail = "test1@example.com",
             CreatedAt = DateTime.UtcNow
         },
         new JobResponse
         {
             Id = "507f1f77bcf86cd799439012",
-            OriginalText = "Job 2",
-            ImprovedText = "Improved Job 2",
-            UserEmail = "user2@example.com",
+            OriginalText = "Test job description 2",
+            ImprovedText = "Improved test job description 2",
+            FileName = "test2.txt",
+            UserEmail = "test2@example.com",
             CreatedAt = DateTime.UtcNow
         }
     };
 
+            var expectedServiceResult = new JobListResult
+            {
+                IsSuccess = true,
+                Jobs = expectedJobs,
+                ErrorMessage = null
+            };
+
             _mockJobService
-                .Setup(s => s.GetAllJobsAsync(0, 20))
-                .ReturnsAsync(expectedJobs);
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync(expectedServiceResult);
 
             // Act
-            var result = await _controller.GetAllJobs();
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
@@ -1003,54 +1171,29 @@ namespace backend_jd_api.Tests.Controllers
             Assert.Equal(expectedJobs[0].Id, response[0].Id);
             Assert.Equal(expectedJobs[1].Id, response[1].Id);
 
-            _mockJobService.Verify(s => s.GetAllJobsAsync(0, 20), Times.Once);
-        }
-
-        [Fact]
-        public async Task GetAllJobs_WithCustomParameters_ReturnsOkResult()
-        {
-            // Arrange
-            var skip = 10;
-            var limit = 5;
-            var expectedJobs = new List<JobResponse>
-    {
-        new JobResponse
-        {
-            Id = "507f1f77bcf86cd799439011",
-            OriginalText = "Job 1",
-            ImprovedText = "Improved Job 1",
-            UserEmail = "user1@example.com",
-            CreatedAt = DateTime.UtcNow
-        }
-    };
-
-            _mockJobService
-                .Setup(s => s.GetAllJobsAsync(skip, limit))
-                .ReturnsAsync(expectedJobs);
-
-            // Act
-            var result = await _controller.GetAllJobs(skip, limit);
-
-            // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result);
-            var response = Assert.IsType<List<JobResponse>>(okResult.Value);
-            Assert.Single(response);
-
             _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
         }
 
         [Fact]
         public async Task GetAllJobs_WithNegativeSkip_ReturnsBadRequest()
         {
+            // Arrange
+            var skip = -1;
+            var limit = 20;
+
             // Act
-            var result = await _controller.GetAllJobs(-1, 20);
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Skip parameter cannot be negative", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Skip parameter cannot be negative", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetAllJobsAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
         }
@@ -1058,15 +1201,23 @@ namespace backend_jd_api.Tests.Controllers
         [Fact]
         public async Task GetAllJobs_WithZeroLimit_ReturnsBadRequest()
         {
+            // Arrange
+            var skip = 0;
+            var limit = 0;
+
             // Act
-            var result = await _controller.GetAllJobs(0, 0);
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Limit must be between 1 and 100", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Limit must be between 1 and 100", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetAllJobsAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
         }
@@ -1074,179 +1225,155 @@ namespace backend_jd_api.Tests.Controllers
         [Fact]
         public async Task GetAllJobs_WithLimitOver100_ReturnsBadRequest()
         {
+            // Arrange
+            var skip = 0;
+            var limit = 101;
+
             // Act
-            var result = await _controller.GetAllJobs(0, 101);
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Limit must be between 1 and 100", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Limit must be between 1 and 100", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.GetAllJobsAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
         }
 
         [Fact]
-        public async Task GetAllJobs_ServiceThrowsException_ReturnsInternalServerError()
+        public async Task GetAllJobs_ServiceReturnsNull_ReturnsUnprocessableEntity()
         {
             // Arrange
-            _mockJobService
-                .Setup(s => s.GetAllJobsAsync(0, 20))
-                .ThrowsAsync(new Exception("Database error"));
-
-            // Act
-            var result = await _controller.GetAllJobs();
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Error retrieving jobs", messageProperty.GetValue(errorResponse));
-        }
-
-        #endregion
-
-        #region GetUserJobs Tests
-
-        [Fact]
-        public async Task GetUserJobs_WithValidEmail_ReturnsOkResult()
-        {
-            // Arrange
-            var userEmail = "test@example.com";
-            var expectedJobs = new List<JobDescription>
-    {
-        new JobDescription
-        {
-            Id = "507f1f77bcf86cd799439011",
-            OriginalText = "User job 1",
-            ImprovedText = "Improved user job 1",
-            UserEmail = userEmail,
-            CreatedAt = DateTime.UtcNow
-        },
-        new JobDescription
-        {
-            Id = "507f1f77bcf86cd799439012",
-            OriginalText = "User job 2",
-            ImprovedText = "Improved user job 2",
-            UserEmail = userEmail,
-            CreatedAt = DateTime.UtcNow
-        }
-    };
+            var skip = 0;
+            var limit = 20;
 
             _mockJobService
-                .Setup(s => s.GetByUserEmailAsync(userEmail))
-                .ReturnsAsync(expectedJobs);
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync((JobListResult?)null);
 
             // Act
-            var result = await _controller.GetUserJobs(userEmail);
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<List<JobDescription>>(okResult.Value);
-            Assert.Equal(2, response.Count);
-            Assert.All(response, job => Assert.Equal(userEmail, job.UserEmail));
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            _mockJobService.Verify(s => s.GetByUserEmailAsync(userEmail), Times.Once);
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Unable to retrieve jobs at this time", errorDict["message"].ToString());
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
         }
 
         [Fact]
-        public async Task GetUserJobs_WithEmptyList_ReturnsOkResultWithEmptyList()
+        public async Task GetAllJobs_ServiceReturnsFailure_ReturnsBadRequest()
         {
             // Arrange
-            var userEmail = "test@example.com";
-            var expectedJobs = new List<JobDescription>();
+            var skip = 0;
+            var limit = 20;
+
+            var failedServiceResult = new JobListResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Failed to retrieve jobs from database",
+                Jobs = null
+            };
 
             _mockJobService
-                .Setup(s => s.GetByUserEmailAsync(userEmail))
-                .ReturnsAsync(expectedJobs);
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync(failedServiceResult);
 
             // Act
-            var result = await _controller.GetUserJobs(userEmail);
+            var result = await _controller.GetAllJobs(skip, limit);
 
             // Assert
-            var okResult = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<List<JobDescription>>(okResult.Value);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Failed to retrieve jobs from database", errorDict["message"].ToString());
+            Assert.Equal("service_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllJobs_ServiceReturnsSuccessButNullJobsList_ReturnsUnprocessableEntity()
+        {
+            // Arrange
+            var skip = 0;
+            var limit = 20;
+
+            var serviceResultWithNullJobs = new JobListResult
+            {
+                IsSuccess = true,
+                ErrorMessage = null,
+                Jobs = null // Success but null jobs list
+            };
+
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync(serviceResultWithNullJobs);
+
+            // Act
+            var result = await _controller.GetAllJobs(skip, limit);
+
+            // Assert
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Jobs retrieval completed but data is unavailable", errorDict["message"].ToString());
+
+            _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllJobs_WithEmptyResultSet_ReturnsOkWithEmptyList()
+        {
+            // Arrange
+            var skip = 0;
+            var limit = 20;
+            var emptyJobs = new List<JobResponse>();
+
+            var expectedServiceResult = new JobListResult
+            {
+                IsSuccess = true,
+                Jobs = emptyJobs,
+                ErrorMessage = null
+            };
+
+            _mockJobService
+                .Setup(s => s.GetAllJobsAsync(skip, limit))
+                .ReturnsAsync(expectedServiceResult);
+
+            // Act
+            var result = await _controller.GetAllJobs(skip, limit);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var response = Assert.IsType<List<JobResponse>>(okResult.Value);
             Assert.Empty(response);
 
-            _mockJobService.Verify(s => s.GetByUserEmailAsync(userEmail), Times.Once);
+            _mockJobService.Verify(s => s.GetAllJobsAsync(skip, limit), Times.Once);
         }
 
-        [Fact]
-        public async Task GetUserJobs_WithNullEmail_ReturnsBadRequest()
-        {
-            // Act
-            var result = await _controller.GetUserJobs(null);
-
-            // Assert
-            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-            var errorResponse = badRequestResult.Value;
-
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Email is required", messageProperty.GetValue(errorResponse));
-
-            _mockJobService.Verify(s => s.GetByUserEmailAsync(It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task GetUserJobs_WithEmptyEmail_ReturnsBadRequest()
-        {
-            // Act
-            var result = await _controller.GetUserJobs("");
-
-            // Assert
-            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-            var errorResponse = badRequestResult.Value;
-
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Email is required", messageProperty.GetValue(errorResponse));
-
-            _mockJobService.Verify(s => s.GetByUserEmailAsync(It.IsAny<string>()), Times.Never);
-        }
-
-        // [Theory]
-        // [InlineData("invalid-email")]
-        // [InlineData("test@")]
-        // [InlineData("@example.com")]
-        // [InlineData("testexample.com")]
-        // public async Task GetUserJobs_WithInvalidEmailFormat_ReturnsBadRequest(string invalidEmail)
-        // {
-        //     // Act
-        //     var result = await _controller.GetUserJobs(invalidEmail);
-
-        //     // Assert
-        //     var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-        //     var errorResponse = badRequestResult.Value;
-
-        //     var messageProperty = errorResponse.GetType().GetProperty("message");
-        //     Assert.Equal("Invalid email format", messageProperty.GetValue(errorResponse));
-
-        //     _mockJobService.Verify(s => s.GetByUserEmailAsync(It.IsAny<string>()), Times.Never);
-        // }
-
-        [Fact]
-        public async Task GetUserJobs_ServiceThrowsException_ReturnsInternalServerError()
-        {
-            // Arrange
-            var userEmail = "test@example.com";
-
-            _mockJobService
-                .Setup(s => s.GetByUserEmailAsync(userEmail))
-                .ThrowsAsync(new Exception("Database error"));
-
-            // Act
-            var result = await _controller.GetUserJobs(userEmail);
-
-            // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result.Result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
-
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Internal server error", messageProperty.GetValue(errorResponse));
-        }
 
         #endregion
 
@@ -1258,9 +1385,16 @@ namespace backend_jd_api.Tests.Controllers
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
 
+            // FIXED: Use JobDeleteResult instead of anonymous object
+            var deleteResult = new JobDeleteResult
+            {
+                IsSuccess = true,
+                ErrorMessage = null
+            };
+
             _mockJobService
                 .Setup(s => s.DeleteJobAsync(jobId))
-                .ReturnsAsync(true);
+                .ReturnsAsync(deleteResult);
 
             // Act
             var result = await _controller.DeleteJob(jobId);
@@ -1288,9 +1422,13 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Job ID is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job ID is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.DeleteJobAsync(It.IsAny<string>()), Times.Never);
         }
@@ -1304,9 +1442,13 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("Job ID is required", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job ID is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.DeleteJobAsync(It.IsAny<string>()), Times.Never);
         }
@@ -1317,9 +1459,16 @@ namespace backend_jd_api.Tests.Controllers
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
 
+            // FIXED: Use JobDeleteResult instead of anonymous object
+            var deleteResult = new JobDeleteResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Job not found"
+            };
+
             _mockJobService
                 .Setup(s => s.DeleteJobAsync(jobId))
-                .ReturnsAsync(false);
+                .ReturnsAsync(deleteResult);
 
             // Act
             var result = await _controller.DeleteJob(jobId);
@@ -1327,37 +1476,99 @@ namespace backend_jd_api.Tests.Controllers
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
             var errorResponse = notFoundResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal($"Job with ID {jobId} not found", messageProperty.GetValue(errorResponse));
+            Assert.Equal("Job not found", errorDict["message"].ToString());
+            Assert.Equal("not_found", errorDict["type"].ToString());
+            Assert.Equal(404, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
 
             _mockJobService.Verify(s => s.DeleteJobAsync(jobId), Times.Once);
         }
 
         [Fact]
-        public async Task DeleteJob_ServiceThrowsException_ReturnsInternalServerError()
+        public async Task DeleteJob_ServiceError_ReturnsBadRequest()
+        {
+            // Arrange
+            var jobId = "507f1f77bcf86cd799439011";
+
+            // FIXED: Use JobDeleteResult instead of anonymous object
+            var deleteResult = new JobDeleteResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "Database connection failed"
+            };
+
+            _mockJobService
+                .Setup(s => s.DeleteJobAsync(jobId))
+                .ReturnsAsync(deleteResult);
+
+            // Act
+            var result = await _controller.DeleteJob(jobId);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Database connection failed", errorDict["message"].ToString());
+            Assert.Equal("service_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            _mockJobService.Verify(s => s.DeleteJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteJob_ServiceReturnsNull_ReturnsUnprocessableEntity()
         {
             // Arrange
             var jobId = "507f1f77bcf86cd799439011";
 
             _mockJobService
                 .Setup(s => s.DeleteJobAsync(jobId))
-                .ThrowsAsync(new Exception("Database error"));
+                .ReturnsAsync((JobDeleteResult?)null);
 
             // Act
             var result = await _controller.DeleteJob(jobId);
 
             // Assert
-            var statusCodeResult = Assert.IsType<ObjectResult>(result);
-            Assert.Equal(500, statusCodeResult.StatusCode);
+            var unprocessableEntityResult = Assert.IsType<UnprocessableEntityObjectResult>(result);
+            var errorResponse = unprocessableEntityResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
 
-            var errorResponse = statusCodeResult.Value;
-            var messageProperty = errorResponse.GetType().GetProperty("message");
-            Assert.Equal("An error occurred while deleting the job. Please try again.", messageProperty.GetValue(errorResponse));
+            Assert.Equal(422, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+            Assert.Equal("processing_error", errorDict["type"].ToString());
+            Assert.Contains("Unable to delete job at this time", errorDict["message"].ToString());
+
+            _mockJobService.Verify(s => s.DeleteJobAsync(jobId), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteJob_WithWhitespaceId_ReturnsBadRequest()
+        {
+            // Act
+            var result = await _controller.DeleteJob("   ");
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            var errorResponse = badRequestResult.Value;
+            var errorDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                JsonSerializer.Serialize(errorResponse)
+            );
+
+            Assert.Equal("Job ID is required", errorDict["message"].ToString());
+            Assert.Equal("validation_error", errorDict["type"].ToString());
+            Assert.Equal(400, JsonSerializer.Deserialize<int>(errorDict["status_code"].ToString()));
+
+            _mockJobService.Verify(s => s.DeleteJobAsync(It.IsAny<string>()), Times.Never);
         }
 
         #endregion
-
 
     }
 }

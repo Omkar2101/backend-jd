@@ -76,6 +76,7 @@
 // Controllers/FileController.cs
 using Microsoft.AspNetCore.Mvc;
 using backend_jd_api.Services;
+using backend_jd_api.Models;
 
 namespace backend_jd_api.Controllers
 {
@@ -95,9 +96,9 @@ namespace backend_jd_api.Controllers
         /// <summary>
         /// Creates a standardized error response
         /// </summary>
-        private object CreateErrorResponse(string message, string type = "error", int statusCode = 400)
+        private ErrorResponse CreateErrorResponse(string message, string type = "error", int statusCode = 400)
         {
-            return new
+            return new ErrorResponse
             {
                 error = true,
                 message = message,

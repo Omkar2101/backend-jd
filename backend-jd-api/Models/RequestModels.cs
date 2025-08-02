@@ -19,7 +19,7 @@ namespace backend_jd_api.Models
         public string Text { get; set; } = string.Empty;
 
         public string? JobTitle { get; set; }
-        
+
         [Required]
         [EmailAddress]
         public string UserEmail { get; set; } = string.Empty;
@@ -43,6 +43,15 @@ namespace backend_jd_api.Models
         public string? ContentType { get; set; }
         public long FileSize { get; set; }
         public string? FileUrl { get; set; } // URL to access the file
-        
+
+    }
+    // In your Models or DTOs folder
+    public class ErrorResponse
+    {
+        public bool error { get; set; }
+        public string message { get; set; }
+        public string type { get; set; }
+        public int status_code { get; set; }
+        public DateTime timestamp { get; set; }
     }
 }
