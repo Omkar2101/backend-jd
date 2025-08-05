@@ -420,7 +420,6 @@ builder.Services.AddSingleton(appSettings);
 builder.Services.AddSingleton<MongoDbContext>();
 builder.Services.AddHttpClient<PythonService>();
 builder.Services.AddScoped<IJobService, JobService>();
-builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 
 builder.Services.AddCors(opt => opt.AddPolicy("AllowFrontend", p =>
   p.WithOrigins("http://localhost:3000","http://localhost:5173","http://localhost:4200")
@@ -520,30 +519,12 @@ Covers success and error paths for each endpoint.
 
 ---
 
-## 15. Tests/Controllers/FileControllerTests.cs
-
-**Purpose:** xUnit unit tests for `FileController`, using Moq to simulate `IFileStorageService` behavior.
-Tests file upload, download, and deletion operations, including error cases.
-
----
-
-## 16. Tests/Services/JobServiceTests.cs
+## 15. Tests/Services/JobServiceTests.cs
 
 **Purpose:** xUnit tests for `JobService`, mocking `MongoDbContext` and `PythonService` to verify  
 - File-based analysis  
 - Text-based analysis  
 - CRUD operations  
-
----
-
-## 17. Tests/Services/FileStorageServiceTests.cs
-
-**Purpose:** xUnit tests for `FileStorageService` covering:
-- File saving with correct directory structure
-- File retrieval with proper content types
-- File deletion
-- URL generation
-- Error handling for invalid files or operations
 
 ---
 
@@ -586,47 +567,7 @@ ENTRYPOINT ["dotnet","backend-jd-api.dll"]
 
 ---
 
-## 20. Services/IFileStorageService.cs & FileStorageService.cs
-
-**Purpose:** Manages file storage operations independently from job processing.
-
-```csharp
-public interface IFileStorageService
-{
-    Task<(string storedFileName, string filePath)> SaveFileAsync(IFormFile file, string userEmail);
-    Task<(byte[] fileData, string contentType, string fileName)> GetFileAsync(string storedFileName);
-    Task<bool> DeleteFileAsync(string storedFileName);
-    string GetFileUrl(string storedFileName);
-}
-```
-
-The `FileStorageService` implementation provides:
-- Secure file storage with user-specific directories
-- File type validation and size limits
-- Standardized file naming and organization
-- Direct file access capabilities
-
-## 21. Controllers/FileController.cs
-
-**Purpose:** Provides REST endpoints for file operations.
-
-```csharp
-[ApiController]
-[Route("api/files")]
-public class FileController : ControllerBase
-{
-    [HttpPost("upload")]
-    public async Task<IActionResult> UploadFile([FromForm] IFormFile file, [FromForm] string userEmail);
-
-    [HttpGet("{fileName}")]
-    public async Task<IActionResult> DownloadFile(string fileName);
-
-    [HttpDelete("{fileName}")]
-    public async Task<IActionResult> DeleteFile(string fileName);
-}
-```
-
-## 22. docker-compose.yml
+## 19. docker-compose.yml
 
 **Purpose:** Orchestrates the API with MongoDB and (optionally) the Python service.
 
@@ -656,32 +597,23 @@ services:
 flowchart LR
   subgraph WebAPI
     JC[JobController]
-    FC[FileController]
     JS[JobService]
     PS[PythonService]
-    FS[FileStorageService]
     DB[MongoDbContext]
   end
 
   JC --> JS
-  JC --> FS
-  FC --> FS
   JS --> DB
   JS --> PS
-  JS --> FS
   DB --> MongoDBDataBase["MongoDB data base"]
   PS --> PythonLLM["Python based LLM analysis service"]
-  FS --> FileSystem["File Storage System"]
 ```
 
-- **JobController** handles job-related HTTP requests.
-- **FileController** manages file upload, download, and deletion operations.
-- **JobService** performs validation, persistence, and delegates analysis to **PythonService**.
-- **FileStorageService** handles file storage operations independently of job processing.
-- **MongoDbContext** encapsulates data storage.
-- **PythonService** calls the external Python based LLM analysis service.
+- **JobController** handles HTTP requests.  
+- **JobService** performs validation, persistence, and delegates analysis to **PythonService**.  
+- **MongoDbContext** encapsulates data storage.  
+- **PythonService** calls the external Python based LLM analysis service.  
 - **MongoDB data base** serves as the persistent data store for job descriptions and analysis results.
-- **File Storage System** stores uploaded files securely with user-based organization.
 
 ---
 
