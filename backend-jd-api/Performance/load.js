@@ -35,7 +35,7 @@ export default function () {
   sleep(1);
 
   // 3. GET jobs by known user email
-  const testEmail = "rathod@gmail.com"; // Replace with a valid test email
+  const testEmail = "user@gmail.com"; // Replace with a valid test email
   let userJobsRes = http.get(`${baseUrl}/user/${encodeURIComponent(testEmail)}`);
   check(userJobsRes, {
     " GET user jobs: status 200 or 404": (r) =>
